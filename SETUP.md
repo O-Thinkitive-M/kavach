@@ -129,9 +129,9 @@ section if you don't use Google Chat** — Kavach works fine without it.
 4. Click **Webhooks** → **Add webhook**.
 5. Fill in:
    - **Name**: `Kavach`
-   - **Avatar URL**: leave blank, or paste
+   - **Avatar URL**: optional — paste
      `https://raw.githubusercontent.com/O-Thinkitive-M/kavach/main/assets/shield-128.png`
-     once the repo is public
+     to show the Kavach shield on messages
 6. Click **Save**, then **copy the URL** it gives you.
 
 It looks like:
@@ -153,28 +153,31 @@ notifications entirely — Kavach still posts comments on the PR itself.
 
 ## 4. Install Kavach
 
-### Right now (before the repo is published)
-
-Kavach isn't on GitHub yet, so install it from the folder on your computer.
 In Claude Code, run these two commands:
 
 ```
-/plugin marketplace add /home/ttpl-lnvl15-0287/Desktop/Agents/PR Review Agent
-```
-
-```
-/plugin install kavach@kavach
-```
-
-> Replace the path if you moved the folder. It must be the folder that contains
-> the `.claude-plugin` directory.
-
-### Later (once the repo is pushed to GitHub)
-
-```
 /plugin marketplace add O-Thinkitive-M/kavach
+```
+
+```
 /plugin install kavach@kavach
 ```
+
+That works on any machine — nothing to clone, no `npm install`, no build step.
+
+<details>
+<summary><b>Installing from a local clone instead</b> (click to expand)</summary>
+
+If you are developing Kavach itself, or working offline, point the marketplace
+at your checkout instead:
+
+```
+/plugin marketplace add /path/to/your/kavach
+/plugin install kavach@kavach
+```
+
+The path must be the folder containing the `.claude-plugin` directory.
+</details>
 
 ### Check it installed
 
@@ -595,6 +598,26 @@ And delete the token at <https://github.com/settings/tokens>.
 | See settings | `/kavach-config` |
 | Change a setting | `/kavach-config review.maxComments=10` |
 | Teach it project rules | Edit `.pr-architect/rules.md` |
+
+---
+
+## Want to see it work before trusting it?
+
+There are six ready-made test pull requests, one per stack, each with known
+defects planted at known severities:
+
+| Stack | Test PR |
+|---|---|
+| React | [#2](https://github.com/O-Thinkitive-M/kavach/pull/2) |
+| Spring Boot | [#3](https://github.com/O-Thinkitive-M/kavach/pull/3) |
+| Angular | [#4](https://github.com/O-Thinkitive-M/kavach/pull/4) |
+| Node / Express | [#5](https://github.com/O-Thinkitive-M/kavach/pull/5) |
+| .NET | [#6](https://github.com/O-Thinkitive-M/kavach/pull/6) |
+| Python / Flask | [#7](https://github.com/O-Thinkitive-M/kavach/pull/7) |
+
+Paste one into Claude Code, then compare the result against the matching file in
+[testing/](https://github.com/O-Thinkitive-M/kavach/tree/main/testing) — each one
+lists every planted defect and its expected severity.
 
 ---
 

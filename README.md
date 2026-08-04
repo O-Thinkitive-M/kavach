@@ -8,7 +8,7 @@
 
 [![version](https://img.shields.io/badge/version-1.0.0-2b7489)](https://github.com/O-Thinkitive-M/kavach)
 [![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#development)
-[![tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)](test/)
+[![tests](https://img.shields.io/badge/tests-115%20passing-brightgreen)](test/)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.18-339933)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -43,11 +43,6 @@ No confirmations. No "shall I post?". One paste, start to finish.
 > GitHub token, connecting Google Chat, and your first review — about 5 minutes.
 
 ```bash
-# From a local clone (use this until the repo is published):
-/plugin marketplace add /path/to/kavach
-/plugin install kavach@kavach
-
-# Once the repo is public:
 /plugin marketplace add O-Thinkitive-M/kavach
 /plugin install kavach@kavach
 ```
@@ -230,13 +225,22 @@ Optional. Kavach works with none.
 
 ---
 
+## Testing it on your stack
+
+Six pull requests with deliberately planted defects, one per stack — React,
+Spring Boot, Angular, Node, .NET and Python. Each documents exactly what is
+planted at what severity, so you can check Kavach's output against ground truth
+rather than guessing whether it did well.
+
+**[testing/README.md](testing/README.md)** has the PR links and what to look for.
+
 ## Development
 
 Zero runtime dependencies. Node 24 runs the TypeScript directly — no build step,
 no bundler, no `npm install`.
 
 ```bash
-node --test test/*.test.ts     # 114 tests
+node --test test/*.test.ts     # 115 tests
 node src/cli.ts run <pr-url>
 node src/cli.ts publish --run <dir> --dry-run
 ```
