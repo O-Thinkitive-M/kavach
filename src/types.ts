@@ -216,3 +216,21 @@ export class KavachError extends Error {
     this.stage = stage;
   }
 }
+
+/**
+ * A credential is missing or does not cover this repo. Distinct from KavachError
+ * because it is recoverable: the skill prompts the user once, stores the answer,
+ * and resumes. It is never sent to Chat as a failure.
+ */
+export class NeedsCredentialError extends Error {
+  /** Which secret to ask for. */
+  kind: 'github-token' | 'chat-webhook';
+  /** Repo owner the token must cover, when known. */
+  owner?: string;
+  constructor(kind: 'github-token' | 'chat-webhook', message: string, owner?: string) {
+    super(message);
+    this.name = 'NeedsCredentialError';
+    this.kind = kind;
+    this.owner = owner;
+  }
+}

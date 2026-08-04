@@ -1,15 +1,24 @@
 // Minimal GitHub REST client. Native fetch, no Octokit.
 
-import { KavachError, type Stage } from '../types.ts';
+import { resolveGithubToken } from '../store/credentials.ts';
+import { KavachError, NeedsCredentialError, type Stage } from '../types.ts';
 
 const API = 'https://api.github.com';
 
-function token(): string {
-  const t = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+/** Owner of the repo currently being reviewed, so the right token is selected. */
+let activeOwner: string | undefined;
+
+export function setActiveOwner(owner: string | undefined): void {
+  activeOwner = owner;
+}
+
+function token(owner = activeOwner): string {
+  const t = resolveGithubToken(owner);
   if (!t) {
-    throw new KavachError(
-      'fetch',
-      'GITHUB_TOKEN is not set. Export a token with `repo` scope and retry.',
+    throw new NeedsCredentialError(
+      'github-token',
+      'No GitHub token available. Kavach needs one to read the PR and post comments.',
+      owner,
     );
   }
   return t;
@@ -17,25 +26,28 @@ function token(): string {
 
 /** Never let a token reach a log or an error message. */
 function redact(s: string): string {
-  return s.replace(/gh[pousr]_[A-Za-z0-9]{16,}/g, 'gh?_***');
+  return s.replace(/gh[pousr]_[A-Za-z0-9]{16,}/g, 'gh?_***').replace(/github_pat_[A-Za-z0-9_]{20,}/g, 'github_pat_***');
 }
 
 export interface RequestOpts {
   method?: string;
   body?: unknown;
   stage?: Stage;
+  /** Override the token, used by setup to verify a token before storing it. */
+  token?: string;
 }
 
 export async function gh<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const { method = 'GET', body, stage = 'fetch' } = opts;
   const url = path.startsWith('http') ? path : API + path;
+  const auth = opts.token ?? token();
 
   let res: Response;
   try {
     res = await fetch(url, {
       method,
       headers: {
-        Authorization: `Bearer ${token()}`,
+        Authorization: `Bearer ${auth}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'kavach',
@@ -49,19 +61,31 @@ export async function gh<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
   if (!res.ok) {
     const text = redact(await res.text().catch(() => ''));
+
+    // 401/403/404 on a repo path usually means "wrong token", not "broken repo".
+    // Surfacing it as recoverable lets the skill ask for a token that covers the
+    // owner instead of failing a review the user could still get.
+    if (res.status === 401 || res.status === 404 || isPermission(res.status, text)) {
+      throw new NeedsCredentialError('github-token', explain(res.status, path, text), activeOwner);
+    }
+
     throw new KavachError(stage, explain(res.status, path, text));
   }
 
   return (await res.json()) as T;
 }
 
+function isPermission(status: number, text: string): boolean {
+  return status === 403 && !/rate limit/i.test(text);
+}
+
 function explain(status: number, path: string, text: string): string {
   const detail = text.slice(0, 300);
-  if (status === 401) return 'GitHub rejected the token (401). It may be expired or revoked.';
+  if (status === 401) return 'GitHub rejected the token (401) — it may be expired or revoked.';
   if (status === 403 && /rate limit/i.test(text)) return 'GitHub rate limit exceeded (403).';
-  if (status === 403) return `Token lacks permission for ${path} (403). Needs \`repo\` scope.`;
+  if (status === 403) return `Token lacks permission for ${path} (403). It needs \`repo\` scope.`;
   if (status === 404) {
-    return `Not found: ${path} (404). Private repo without access, or the PR does not exist.`;
+    return `Cannot see ${path} (404). Either the PR does not exist, or the token has no access to this repository.`;
   }
   if (status === 422) return `GitHub rejected the request (422): ${detail}`;
   return `GitHub returned ${status} for ${path}: ${detail}`;
@@ -105,7 +129,41 @@ export function parsePrUrl(input: string): ParsedPrUrl {
 }
 
 /** Login of the authenticated user — used to recognize Kavach's own prior comments. */
-export async function currentUser(): Promise<string> {
-  const user = await gh<{ login: string }>('/user');
+export async function currentUser(explicitToken?: string): Promise<string> {
+  const user = await gh<{ login: string }>('/user', { token: explicitToken });
   return user.login;
+}
+
+export interface RepoAccess {
+  login: string;
+  canWrite: boolean;
+  repoFullName: string;
+  private: boolean;
+}
+
+/**
+ * Confirm a token can actually see the repo and post a review, before it is
+ * stored. Catches a read-only or wrong-account token at setup instead of
+ * halfway through a review.
+ */
+export async function verifyAccess(
+  owner: string,
+  repo: string,
+  explicitToken?: string,
+): Promise<RepoAccess> {
+  const login = await currentUser(explicitToken);
+  const info = await gh<{
+    full_name: string;
+    private: boolean;
+    permissions?: { push?: boolean; pull?: boolean; admin?: boolean };
+  }>(`/repos/${owner}/${repo}`, { token: explicitToken });
+
+  return {
+    login,
+    // No `permissions` block means an unauthenticated-equivalent view; treat as
+    // read-only rather than assuming success.
+    canWrite: Boolean(info.permissions?.push || info.permissions?.admin),
+    repoFullName: info.full_name,
+    private: info.private,
+  };
 }

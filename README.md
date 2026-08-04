@@ -25,15 +25,36 @@ you:  https://github.com/acme/api/pull/482
 /plugin install kavach@kavach
 ```
 
-Set two environment variables:
+Then paste a PR URL. The first time, Kavach asks for a GitHub token (and
+optionally a Google Chat webhook), verifies them, and stores them. **It never asks
+again** — every later review runs silently.
 
-```bash
-export GITHUB_TOKEN="ghp_..."               # needs `repo` scope
-export GOOGLE_CHAT_WEBHOOK="https://chat.googleapis.com/v1/spaces/..."
+To set up ahead of time:
+
+```
+/kavach-setup
 ```
 
-That is the whole setup. There is no onboarding interview — Kavach detects the
-stack on its first run in a repo and writes `.pr-architect/config.json` itself.
+Credentials live in `~/.kavach/credentials.json` with `0600` permissions, outside
+any repository, so they cannot be committed by accident. Environment variables
+(`GITHUB_TOKEN`, `GOOGLE_CHAT_WEBHOOK`) take precedence when set, which is what CI
+should use.
+
+The token needs the **`repo`** scope — [create one here](https://github.com/settings/tokens/new?scopes=repo).
+Fine-grained tokens work too with *Pull requests: read & write*.
+
+There is no project onboarding interview either: Kavach detects the stack on its
+first run in a repo and writes `.pr-architect/config.json` itself.
+
+### Multiple accounts
+
+Reviewing a repo your stored token cannot reach? Kavach detects it, asks for a
+token that covers that organization, and stores it scoped to that owner — your
+existing default is left alone. One machine, work and personal repos:
+
+```bash
+kavach setup --token <token> --repo acme/api --owner acme
+```
 
 ## Use
 
@@ -115,6 +136,8 @@ Optional. Kavach works with none.
 /kavach-config review.maxComments=25
 /kavach-config budget.maxContextTokens=120000
 /kavach-config review.neverReviewers=accessibility
+
+/kavach-setup status                            # what credentials are configured
 ```
 
 `.pr-architect/rules.md` and `knowledge.md` are yours — write project rules there

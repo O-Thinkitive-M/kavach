@@ -5,17 +5,21 @@ import { parseArgs } from 'node:util';
 import { run } from './commands/run.ts';
 import { publish } from './commands/publish.ts';
 import { configCommand } from './commands/config.ts';
+import { setup } from './commands/setup.ts';
 import { notifyError } from './notify/chat.ts';
 import { banner, c } from './brand.ts';
-import { KavachError, type Stage } from './types.ts';
+import { KavachError, NeedsCredentialError, type Stage } from './types.ts';
 
-const USAGE = `${'kavach'} — autonomous PR review
+const USAGE = `kavach — autonomous PR review
 
   kavach run <pr-url> [--deep] [--root <dir>]
       Fetch, parse, route and budget a PR. Writes context.json.
 
   kavach publish --run <dir> [--dry-run]
       Dedupe, apply confidence policy, post inline comments, send Chat card.
+
+  kavach setup [--token <t>] [--webhook <url>] [--repo owner/repo] [--status]
+      Store and verify credentials. Runs once per user.
 
   kavach config [--show] [--set key=value] [--reset-knowledge]
       Inspect or tune .pr-architect/config.json.
@@ -33,6 +37,12 @@ async function main(): Promise<number> {
       show: { type: 'boolean', default: false },
       set: { type: 'string', multiple: true },
       'reset-knowledge': { type: 'boolean', default: false },
+      token: { type: 'string' },
+      webhook: { type: 'string' },
+      repo: { type: 'string' },
+      owner: { type: 'string' },
+      status: { type: 'boolean', default: false },
+      'test-chat': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -59,6 +69,17 @@ async function main(): Promise<number> {
       return 0;
     }
 
+    case 'setup':
+      await setup({
+        token: values.token,
+        webhook: values.webhook,
+        repo: values.repo,
+        owner: values.owner,
+        status: values.status,
+        testChat: values['test-chat'],
+      });
+      return 0;
+
     case 'config':
       await configCommand({
         root,
@@ -77,6 +98,17 @@ async function main(): Promise<number> {
 main()
   .then((code) => process.exit(code))
   .catch(async (err) => {
+    // A missing credential is recoverable, not a failure: emit a machine-readable
+    // marker so the skill knows to ask the user once, then resume. Never sent to
+    // Chat — there may be no webhook configured yet, and it is not an incident.
+    if (err instanceof NeedsCredentialError) {
+      process.stdout.write(
+        `KAVACH_NEEDS=${err.kind}\n` + (err.owner ? `KAVACH_OWNER=${err.owner}\n` : ''),
+      );
+      process.stderr.write('\n' + c.yellow('  Kavach needs credentials: ') + err.message + '\n\n');
+      process.exit(2);
+    }
+
     const stage: Stage = err instanceof KavachError ? err.stage : 'fetch';
     const message = err instanceof Error ? err.message : String(err);
 

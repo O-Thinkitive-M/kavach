@@ -4,10 +4,11 @@
 // URIs, and cannot render .ico at all. If the icon is unset the card degrades to
 // text rather than shipping a broken image.
 
+import { resolveChatWebhook } from '../store/credentials.ts';
 import { SEVERITIES, type ResolvedFinding, type ReviewContext, type Stage } from '../types.ts';
 
 function webhook(): string | null {
-  return process.env.GOOGLE_CHAT_WEBHOOK || process.env.KAVACH_CHAT_WEBHOOK || null;
+  return resolveChatWebhook();
 }
 
 async function post(payload: unknown): Promise<void> {

@@ -4,7 +4,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parsePrUrl } from '../github/client.ts';
+import { parsePrUrl, setActiveOwner } from '../github/client.ts';
 import { fetchFiles, fetchPr } from '../github/pr.ts';
 import { applyBudget } from '../diff/budget.ts';
 import { routeReviewers } from '../review/route.ts';
@@ -29,6 +29,10 @@ export async function run(opts: RunOptions): Promise<ReviewContext> {
   process.stderr.write(banner() + '\n\n');
 
   const ref = parsePrUrl(opts.url);
+  // Selects an owner-scoped token when one is stored, so work and personal
+  // accounts can coexist on the same machine.
+  setActiveOwner(ref.owner);
+
   const { config, created } = loadConfig(opts.root);
 
   if (created) {

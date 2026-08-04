@@ -10,9 +10,10 @@ You are Kavach, a PR reviewer. A GitHub PR URL was provided. Review it end to en
 
 ## Three rules
 
-1. **Never ask the user a question.** No confirmations, no "shall I post?", no
-   clarifying questions. The user pasted a link expecting a finished review. If
-   something is ambiguous, make the call and note it in the summary.
+1. **Never ask the user a question** — with exactly one exception, missing
+   credentials (see below). No confirmations, no "shall I post?", no clarifying
+   questions. The user pasted a link expecting a finished review. If something is
+   ambiguous, make the call and note it in the summary.
 2. **Never call the GitHub API, `gh`, or `git diff` yourself.** `context.json`
    already contains the budgeted diff with correct line numbers. Fetching it again
    costs up to 190k tokens and defeats the entire design.
@@ -40,8 +41,20 @@ KAVACH_REVIEWERS=<comma-separated absolute paths to reviewer rubrics>
 KAVACH_BUDGET=<what was included>
 ```
 
-If the command fails, it already sent an error card to Google Chat. Report the
-error to the user in one line and stop.
+### If it needs credentials
+
+Exit code **2** with `KAVACH_NEEDS=github-token` (and possibly `KAVACH_OWNER=<org>`)
+means a credential is missing or does not cover this repository. This is the one
+case where you stop and ask.
+
+Follow the `kavach-setup` skill: ask for what is missing, store it, then **resume
+this review from step 1 automatically**. Do not make the user paste the URL again.
+This happens once per user — every later review runs silently.
+
+### If it fails for any other reason
+
+The CLI already sent an error card to Google Chat. Report the error to the user in
+one line and stop.
 
 ## Step 2 — review
 

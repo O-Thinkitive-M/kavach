@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { currentUser } from '../github/client.ts';
+import { currentUser, setActiveOwner } from '../github/client.ts';
 import { fetchReviewComments } from '../github/pr.ts';
 import { postReview, type InlineComment } from '../github/publish.ts';
 import { resolveFindings } from '../review/dedupe.ts';
@@ -30,6 +30,7 @@ export async function publish(opts: PublishOptions): Promise<void> {
 
   const { config } = loadConfig(opts.root);
   const { pr } = context;
+  setActiveOwner(pr.owner);
 
   // Existing Kavach comments on this PR, so a re-run stays silent.
   let existingBodies: string[] = [];
