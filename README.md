@@ -20,7 +20,16 @@ you:  https://github.com/acme/api/pull/482
 
 ## Install
 
+> **New to Kavach? Read the [step-by-step setup guide](SETUP.md)** — it walks
+> through getting a GitHub token, connecting Google Chat, and reviewing your first
+> PR in about 5 minutes.
+
 ```bash
+# From a local clone (use this until the repo is published):
+/plugin marketplace add /path/to/kavach
+/plugin install kavach@kavach
+
+# Once the repo is public:
 /plugin marketplace add O-Thinkitive-M/kavach
 /plugin install kavach@kavach
 ```
