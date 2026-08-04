@@ -1,0 +1,7 @@
+# Kavach's per-repo working store. config.json and rules.md are worth committing
+# in a target repo; the run artifacts are not.
+.pr-architect/
+
+node_modules/
+*.log
+.DS_Store

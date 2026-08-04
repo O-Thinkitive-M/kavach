@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Kavach shield">
+  <title>Kavach</title>
+  <!--
+    A mask keeps the light bands transparent regardless of renderer, which a
+    stack of evenodd paths does not do reliably.
+    White in the mask = painted, black = cut away.
+  -->
+  <mask id="kavach-shield">
+    <circle cx="256" cy="256" r="251" fill="#fff"/>
+    <circle cx="256" cy="256" r="176" fill="#000"/>
+    <circle cx="256" cy="256" r="134" fill="#fff"/>
+    <circle cx="256" cy="256" r="59" fill="#000"/>
+    <!-- Star, apex up: outer radius 77, inner radius 34. -->
+    <polygon fill="#fff" points="256,179 268.7,218.1 309.8,218.1 276.6,242.3 289.2,281.4 256,257.2 222.8,281.4 235.4,242.3 202.2,218.1 243.3,218.1"/>
+  </mask>
+  <rect width="512" height="512" fill="currentColor" mask="url(#kavach-shield)"/>
+</svg>

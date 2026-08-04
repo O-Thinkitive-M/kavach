@@ -1,0 +1,21 @@
+{
+  "name": "kavach",
+  "owner": {
+    "name": "Thinkitive",
+    "url": "https://github.com/O-Thinkitive-M"
+  },
+  "metadata": {
+    "description": "Kavach — autonomous AI PR review",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "kavach",
+      "source": "./",
+      "description": "Autonomous AI PR review. Paste a GitHub PR URL and Kavach reviews it end to end: inline comments for verified findings, questions for uncertain ones, and a Google Chat summary.",
+      "version": "1.0.0",
+      "category": "code-review",
+      "keywords": ["code-review", "pull-request", "github", "security"]
+    }
+  ]
+}
