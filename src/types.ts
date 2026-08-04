@@ -176,6 +176,12 @@ export interface KavachConfig {
     testFramework: string;
     framework: string;
     monorepo: boolean;
+    /** Set by /kavach-init. Absent means the project was never initialized. */
+    initialized?: string;
+    /** What this project is, in the user's words. Passed to every reviewer. */
+    summary?: string;
+    /** Areas the user flagged as high-risk, e.g. "payments", "auth". */
+    focusAreas?: string[];
   };
   review: {
     mode: ReviewMode;

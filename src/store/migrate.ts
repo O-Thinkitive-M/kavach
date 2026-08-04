@@ -66,6 +66,11 @@ function withDefaults(c: Record<string, any>): KavachConfig {
       testFramework: c.project?.testFramework ?? 'unknown',
       framework: c.project?.framework ?? 'none',
       monorepo: Boolean(c.project?.monorepo),
+      // Optional, written by /kavach-init. Only carried through when present, so
+      // a config that was never initialized stays clean.
+      ...(c.project?.initialized ? { initialized: c.project.initialized } : {}),
+      ...(c.project?.summary ? { summary: c.project.summary } : {}),
+      ...(c.project?.focusAreas?.length ? { focusAreas: c.project.focusAreas } : {}),
     },
     review: {
       mode: c.review?.mode === 'deep' ? 'deep' : 'standard',

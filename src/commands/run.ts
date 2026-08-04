@@ -13,6 +13,8 @@ import { banner, c } from '../brand.ts';
 import {
   CONTEXT_SCHEMA,
   KAVACH_VERSION,
+  type KavachConfig,
+  type KnowledgeBundle,
   type ReviewContext,
   type ReviewMode,
 } from '../types.ts';
@@ -23,6 +25,29 @@ export interface RunOptions {
   url: string;
   root: string;
   deep: boolean;
+}
+
+/**
+ * Fold what /kavach-init recorded into the knowledge bundle, so every reviewer
+ * sees what the project is and which areas the team flagged as high-risk.
+ */
+function withProjectContext(
+  knowledge: KnowledgeBundle,
+  config: KavachConfig,
+): KnowledgeBundle {
+  const { summary, focusAreas } = config.project;
+  if (!summary && !focusAreas?.length) return knowledge;
+
+  const preamble = [
+    summary ? `Project: ${summary}` : '',
+    focusAreas?.length
+      ? `Treat these areas as high-risk; be more thorough there: ${focusAreas.join(', ')}.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return { ...knowledge, rules: `${preamble}\n\n${knowledge.rules}`.trim() };
 }
 
 export async function run(opts: RunOptions): Promise<ReviewContext> {
@@ -59,7 +84,7 @@ export async function run(opts: RunOptions): Promise<ReviewContext> {
     budget,
     files,
     priorFindings: [...prior].map((fingerprint) => ({ fingerprint, path: '', line: 0 })),
-    knowledge: loadKnowledge(opts.root),
+    knowledge: withProjectContext(loadKnowledge(opts.root), config),
   };
 
   const runDir = storePath(opts.root, 'runs', `${pr.number}-${pr.headSha.slice(0, 7)}`);

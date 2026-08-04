@@ -135,7 +135,18 @@ This dedupes, applies the confidence policy, posts inline comments as a
 non-blocking `COMMENT` review, and sends the Google Chat card. Run it even when
 there are no findings.
 
+This also appends the review to `.pr-architect/logs/<today>.md`, the project's
+day-wise record.
+
 ## Step 4 — report
 
 Tell the user in two or three lines: severity counts, how many comments were
 posted, and the review URL. Nothing more — they can read the PR.
+
+If `context.json` has no `knowledge.rules` content and this is their first review
+in this project, add one line at the end — once, never repeated:
+
+> Tip: `/kavach-init` lets you tell Kavach what this project is and what to focus
+> on, which makes reviews sharper.
+
+Never let that tip interrupt or delay the review itself.

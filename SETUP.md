@@ -17,11 +17,23 @@ This guide takes about **5 minutes**. No prior setup knowledge needed.
 3. [Get a Google Chat webhook](#3-get-a-google-chat-webhook-optional)
 4. [Install Kavach](#4-install-kavach)
 5. [Tell Kavach your credentials](#5-tell-kavach-your-credentials)
-6. [Review your first PR](#6-review-your-first-pr)
-7. [Using it on any other project](#7-using-it-on-any-other-project)
-8. [Settings you can change](#8-settings-you-can-change)
-9. [When something goes wrong](#9-when-something-goes-wrong)
-10. [Common questions](#10-common-questions)
+6. [Set up your project](#6-set-up-your-project)
+7. [Review your first PR](#7-review-your-first-pr)
+8. [The day-wise review log](#8-the-day-wise-review-log)
+9. [Using it on any other project](#9-using-it-on-any-other-project)
+10. [Settings you can change](#10-settings-you-can-change)
+11. [When something goes wrong](#11-when-something-goes-wrong)
+12. [Common questions](#12-common-questions)
+
+### The flow at a glance
+
+| # | You do this | How often |
+|---|---|---|
+| 1 | Open your project folder in Claude Code | every session |
+| 2 | Install the plugin | once per machine |
+| 3 | `/kavach-setup` — token and webhook | **once ever** |
+| 4 | `/kavach-init` — stack and what to focus on | **once per project** |
+| 5 | Paste a PR URL | every review, no questions |
 
 ---
 
@@ -171,7 +183,7 @@ In Claude Code, run these two commands:
 ```
 
 You should see **kavach** in the list. If you don't, see
-[When something goes wrong](#9-when-something-goes-wrong).
+[When something goes wrong](#11-when-something-goes-wrong).
 
 ---
 
@@ -210,7 +222,51 @@ Shows a masked version (`ghp_…4a2f`), never the real token.
 
 ---
 
-## 6. Review your first PR
+## 6. Set up your project
+
+**Open the project folder you want reviewed** in Claude Code, then run:
+
+```
+/kavach-init
+```
+
+Kavach looks at the folder first and figures out the mechanical details itself,
+then asks you **four short questions** — with its guesses already filled in, so
+you're confirming rather than typing:
+
+| It asks | Example answer |
+|---|---|
+| **Is this stack right?** | *"I detected Next.js · TypeScript · pnpm · Vitest. Correct?"* → yes |
+| **What is this project?** | "Patient scheduling API for a healthcare provider" |
+| **What matters most in review?** | "auth, PHI handling, data migrations" |
+| **Any rules to enforce?** | "All DB access goes through `repositories/`" |
+
+**This happens once per project folder.** After it, paste a PR link and Kavach
+reviews silently — it never asks you anything again.
+
+### Why bother?
+
+Question 2 and 3 are what turn a generic reviewer into one that knows your
+codebase. Telling Kavach *"payments and auth are where bugs hurt"* makes it look
+harder at those files. Rules are enforced on every single review.
+
+### Changing your answers later
+
+Run `/kavach-init` again any time. It keeps what you already told it and updates
+what you change:
+
+```
+/kavach-init            # update — keeps existing answers
+/kavach-init reset      # start over, discard the old requirements
+/kavach-init status     # show what's configured now
+```
+
+> **This step is optional.** Skip it and Kavach still reviews using auto-detection
+> alone. It's just noticeably better when you've told it what the project is.
+
+---
+
+## 7. Review your first PR
 
 Open **any project** in Claude Code and paste a pull request link into the chat:
 
@@ -251,13 +307,60 @@ bigger budget.
 
 ---
 
-## 7. Using it on any other project
+## 8. The day-wise review log
+
+Every review is recorded in a dated file inside the project:
+
+```
+.pr-architect/logs/2026-08-04.md
+```
+
+One file per day, appended to after each review. Open it directly, or ask:
+
+```
+/kavach-log                 # today
+/kavach-log 2026-08-04      # a specific day
+/kavach-log list            # which days have logs
+```
+
+Each entry records the PR, which reviewers ran, how many files were reviewed,
+what was found, and how each finding was posted:
+
+```markdown
+## 14:36 · [#482 Add patient search endpoint](https://github.com/acme/api/pull/482)
+
+- **Repo**: `acme/api` · branch `feat/search` · by @dev
+- **Reviewers**: security, typescript, business-logic (standard)
+- **Files**: 12 of 18 reviewed, 3 truncated · 41k tokens
+- **Findings**: High 2 · Medium 3 · Low 1
+- **Comments posted**: 7 · [view review](…)
+
+| Severity | File | Finding | Posted as |
+|---|---|---|---|
+| High | `src/api/search.ts:34` | Unparameterized SQL query | issue |
+| Medium | `src/api/search.ts:51` | Could this return unbounded rows? | question |
+```
+
+It's useful for a standup ("what did we review yesterday?"), for spotting patterns
+across a week, and as a record of what the agent actually did.
+
+Logs are local to each project. Add `.pr-architect/logs/` to that project's
+`.gitignore` if you don't want them committed — or commit them if the team wants
+shared history.
+
+---
+
+## 9. Using it on any other project
 
 **Nothing to set up.** Open a different project, paste a PR link, and it works.
 
 The first time Kavach sees a new project it silently figures out the language,
 framework, package manager and test tool, then saves that to a
-`.pr-architect/` folder in that project. It never asks you questions about it.
+`.pr-architect/` folder in that project.
+
+Run `/kavach-init` in each project you care about to tell it what that project is —
+that's per-folder, and takes a minute. Your credentials from
+[step 5](#5-tell-kavach-your-credentials) are already shared across all of them.
 
 It works with any stack — React, Next.js, Node, Python, Go, Java, Rust, PHP, Ruby,
 plain JavaScript, or a mix.
@@ -271,11 +374,13 @@ plain JavaScript, or a mix.
 | `knowledge.md` | ✅ Yes | Shared context about the codebase |
 | `stack.md` | ✅ Yes | Detected stack info |
 | `runs/` | ❌ No | Temporary working files |
+| `logs/` | your call | Day-wise review history — commit for shared record, ignore to keep the repo clean |
 
 Add this to that project's `.gitignore`:
 
 ```gitignore
 .pr-architect/runs/
+.pr-architect/logs/     # remove this line if you want shared review history
 ```
 
 ### Teaching Kavach your project's rules
@@ -295,7 +400,7 @@ you can do to make reviews better.
 
 ---
 
-## 8. Settings you can change
+## 10. Settings you can change
 
 Everything has a sensible default. Change things only if you want to.
 
@@ -338,7 +443,7 @@ Too many comments? Try:
 
 ---
 
-## 9. When something goes wrong
+## 11. When something goes wrong
 
 ### "Kavach needs credentials"
 
@@ -402,7 +507,7 @@ budget and tells you honestly: *"Reviewed 12 of 18 files"*. To review more:
 
 ---
 
-## 10. Common questions
+## 12. Common questions
 
 **Does this cost extra money?**
 No API key, no extra bill. It runs inside your existing Claude Code session.
@@ -456,8 +561,10 @@ And delete the token at <https://github.com/settings/tokens>.
 
 | I want to... | Command |
 |---|---|
-| Set up credentials | `/kavach-setup` |
-| See what's configured | `/kavach-setup status` |
+| Set up credentials (once ever) | `/kavach-setup` |
+| Set up a project (once per folder) | `/kavach-init` |
+| See what's configured | `/kavach-setup status` · `/kavach-init status` |
+| See today's reviews | `/kavach-log` |
 | Review a PR | Paste the PR URL in chat |
 | Review thoroughly | `/kavach-review <url>` and say "deep" |
 | See settings | `/kavach-config` |

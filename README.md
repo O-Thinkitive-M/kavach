@@ -139,8 +139,32 @@ React · Next.js · Node · Python · Go · Java · Rust · PHP · Ruby · or a 
 
 Open a new project, paste a PR link, and it works. On first run Kavach silently
 detects the language, framework, package manager, test framework and monorepo
-layout, then writes `.pr-architect/config.json`. **It never asks you questions
-about your project.**
+layout, then writes `.pr-architect/config.json`.
+
+### Set up a project properly — `/kavach-init`
+
+Optional, once per project folder. Kavach detects the mechanical details itself
+and asks four short questions with its guesses pre-filled:
+
+- **Is this stack right?** — *Next.js · TypeScript · pnpm · Vitest*
+- **What is this project?** — *"Patient scheduling API for a healthcare provider"*
+- **What matters most?** — *auth, PHI handling, data migrations*
+- **Any rules to enforce?** — *"All DB access goes through `repositories/`"*
+
+Answers go into every reviewer's context, so findings are grounded in what your
+project actually is. Re-run any time to update; `/kavach-init reset` starts over.
+
+**Reviews after this never ask you anything.**
+
+### Day-wise review log
+
+Every review appends to `.pr-architect/logs/YYYY-MM-DD.md` — PR, reviewers used,
+files covered, findings and how each was posted.
+
+```bash
+/kavach-log             # today
+/kavach-log list        # which days have logs
+```
 
 ### Teach it your project's rules
 

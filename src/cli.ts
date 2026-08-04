@@ -6,6 +6,8 @@ import { run } from './commands/run.ts';
 import { publish } from './commands/publish.ts';
 import { configCommand } from './commands/config.ts';
 import { setup } from './commands/setup.ts';
+import { init } from './commands/init.ts';
+import { logCommand } from './commands/log.ts';
 import { notifyError } from './notify/chat.ts';
 import { banner, c } from './brand.ts';
 import { KavachError, NeedsCredentialError, type Stage } from './types.ts';
@@ -20,6 +22,12 @@ const USAGE = `kavach — autonomous PR review
 
   kavach setup [--token <t>] [--webhook <url>] [--repo owner/repo] [--status]
       Store and verify credentials. Runs once per user.
+
+  kavach init [--detect] [--summary <s>] [--focus a,b] [--rules <text>] [--reset]
+      Set up a project. Runs once per folder; re-run to update.
+
+  kavach log [--show] [--day YYYY-MM-DD] [--list]
+      Read the day-wise review log.
 
   kavach config [--show] [--set key=value] [--reset-knowledge]
       Inspect or tune .pr-architect/config.json.
@@ -43,6 +51,16 @@ async function main(): Promise<number> {
       owner: { type: 'string' },
       status: { type: 'boolean', default: false },
       'test-chat': { type: 'boolean', default: false },
+      detect: { type: 'boolean', default: false },
+      reset: { type: 'boolean', default: false },
+      summary: { type: 'string' },
+      focus: { type: 'string' },
+      stack: { type: 'string' },
+      rules: { type: 'string' },
+      'max-comments': { type: 'string' },
+      strictness: { type: 'string' },
+      day: { type: 'string' },
+      list: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -78,6 +96,25 @@ async function main(): Promise<number> {
         status: values.status,
         testChat: values['test-chat'],
       });
+      return 0;
+
+    case 'init':
+      await init({
+        root,
+        detect: values.detect,
+        reset: values.reset,
+        summary: values.summary,
+        focus: values.focus,
+        stack: values.stack,
+        rules: values.rules,
+        maxComments: values['max-comments'],
+        strictness: values.strictness,
+        status: values.status,
+      });
+      return 0;
+
+    case 'log':
+      logCommand({ root, day: values.day, list: values.list });
       return 0;
 
     case 'config':

@@ -9,6 +9,7 @@ import { resolveFindings } from '../review/dedupe.ts';
 import { renderComment } from '../review/policy.ts';
 import { notifySuccess } from '../notify/chat.ts';
 import { appendHistory, loadConfig, priorFingerprints } from '../store/config.ts';
+import { appendLog } from '../store/log.ts';
 import { c } from '../brand.ts';
 import {
   KavachError,
@@ -59,12 +60,24 @@ export async function publish(opts: PublishOptions): Promise<void> {
 
   const body = reviewBody(context, findingsFile.summary ?? '', resolved);
 
+  const allFindings = [...resolved.toPost, ...resolved.overflow, ...resolved.unanchored];
+
   if (opts.dryRun) {
     process.stderr.write(c.yellow('  dry run — nothing posted\n\n'));
     process.stdout.write(body + '\n\n');
     for (const cm of comments) {
       process.stdout.write(c.grey(`--- ${cm.path}:${cm.line}\n`) + cm.body + '\n\n');
     }
+    // Logged even on a dry run, marked as such, so the day's record is complete.
+    const logged = appendLog(opts.root, {
+      context,
+      findings: allFindings,
+      posted: comments.length,
+      summary: findingsFile.summary ?? '',
+      reviewUrl: pr.url,
+      dryRun: true,
+    });
+    process.stderr.write(c.grey(`  logged to ${logged}\n\n`));
     return;
   }
 
@@ -81,14 +94,28 @@ export async function publish(opts: PublishOptions): Promise<void> {
     fingerprints: resolved.toPost.map((f) => f.fingerprint),
   });
 
-  const all = [...resolved.toPost, ...resolved.overflow, ...resolved.unanchored];
-  await notifySuccess(context, all, comments.length, findingsFile.summary ?? '', config.notify.iconUrl)
-    .catch((err) => {
-      // A webhook failure must not fail a review that already posted.
-      process.stderr.write(c.yellow(`  Chat notification failed: ${err.message}\n`));
-    });
+  const logged = appendLog(opts.root, {
+    context,
+    findings: allFindings,
+    posted: comments.length,
+    summary: findingsFile.summary ?? '',
+    reviewUrl,
+    dryRun: false,
+  });
 
-  printSummary(all, comments.length, resolved.duplicates, resolved.dropped, reviewUrl);
+  await notifySuccess(
+    context,
+    allFindings,
+    comments.length,
+    findingsFile.summary ?? '',
+    config.notify.iconUrl,
+  ).catch((err) => {
+    // A webhook failure must not fail a review that already posted.
+    process.stderr.write(c.yellow(`  Chat notification failed: ${err.message}\n`));
+  });
+
+  printSummary(allFindings, comments.length, resolved.duplicates, resolved.dropped, reviewUrl);
+  process.stderr.write(c.grey(`  logged to ${logged}\n\n`));
 }
 
 function reviewBody(

@@ -1,5 +1,5 @@
-# Kavach's per-repo working store. config.json and rules.md are worth committing
-# in a target repo; the run artifacts are not.
+# Kavach's own working store for this repo. In a *target* project, commit
+# config.json / rules.md / knowledge.md and ignore runs/ and logs/ instead.
 .pr-architect/
 
 node_modules/
