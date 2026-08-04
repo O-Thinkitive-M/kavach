@@ -1,14 +1,29 @@
-<img src="assets/shield-256.png" alt="Kavach" width="96" align="right">
+<div align="center">
+
+<img src="assets/shield-256.png" alt="Kavach" width="180">
 
 # Kavach
 
-Autonomous AI PR review for Claude Code.
+### *Paste a link. Get a review. That's the whole interface.*
 
-Paste a GitHub PR URL into Claude Code. Kavach fetches the diff, routes it to the
-reviewers that matter for those files, judges it, posts inline comments for
-findings it can stand behind, and sends a Google Chat summary.
+[![version](https://img.shields.io/badge/version-1.0.0-2b7489)](https://github.com/O-Thinkitive-M/kavach)
+[![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#development)
+[![tests](https://img.shields.io/badge/tests-60%20passing-brightgreen)](test/)
+[![node](https://img.shields.io/badge/node-%E2%89%A522.18-339933)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**One paste. No questions. No configuration.**
+**Autonomous PR review inside Claude Code.**
+No API key · No onboarding interview · Never blocks a merge
+
+[Setup guide](SETUP.md) · [How it works](#how-it-works) · [Configuration](#configuration)
+
+</div>
+
+---
+
+You paste a pull request URL into Claude Code. Kavach fetches the diff, picks the
+reviewers that matter for those files, reads the code, posts inline comments on
+the exact lines with problems, and sends a summary to Google Chat.
 
 ```
 you:  https://github.com/acme/api/pull/482
@@ -18,11 +33,14 @@ you:  https://github.com/acme/api/pull/482
       7 inline comments posted · Chat card sent
 ```
 
+No confirmations. No "shall I post?". One paste, start to finish.
+
+---
+
 ## Install
 
-> **New to Kavach? Read the [step-by-step setup guide](SETUP.md)** — it walks
-> through getting a GitHub token, connecting Google Chat, and reviewing your first
-> PR in about 5 minutes.
+> **First time?** The **[step-by-step setup guide](SETUP.md)** covers getting a
+> GitHub token, connecting Google Chat, and your first review — about 5 minutes.
 
 ```bash
 # From a local clone (use this until the repo is published):
@@ -35,50 +53,27 @@ you:  https://github.com/acme/api/pull/482
 ```
 
 Then paste a PR URL. The first time, Kavach asks for a GitHub token (and
-optionally a Google Chat webhook), verifies them, and stores them. **It never asks
-again** — every later review runs silently.
+optionally a Google Chat webhook), verifies them against the live API, and stores
+them. **It never asks again** — every later review runs silently.
 
-To set up ahead of time:
-
-```
-/kavach-setup
-```
+To set up ahead of time: `/kavach-setup`
 
 Credentials live in `~/.kavach/credentials.json` with `0600` permissions, outside
-any repository, so they cannot be committed by accident. Environment variables
-(`GITHUB_TOKEN`, `GOOGLE_CHAT_WEBHOOK`) take precedence when set, which is what CI
-should use.
-
-The token needs the **`repo`** scope — [create one here](https://github.com/settings/tokens/new?scopes=repo).
-Fine-grained tokens work too with *Pull requests: read & write*.
-
-There is no project onboarding interview either: Kavach detects the stack on its
-first run in a repo and writes `.pr-architect/config.json` itself.
+any repository, so they cannot be committed by accident. `GITHUB_TOKEN` and
+`GOOGLE_CHAT_WEBHOOK` environment variables take precedence when set — that is
+what CI should use.
 
 ### Multiple accounts
 
 Reviewing a repo your stored token cannot reach? Kavach detects it, asks for a
-token that covers that organization, and stores it scoped to that owner — your
+token covering that organization, and stores it scoped to that owner — your
 existing default is left alone. One machine, work and personal repos:
 
 ```bash
 kavach setup --token <token> --repo acme/api --owner acme
 ```
 
-## Use
-
-Paste a PR URL in chat, or:
-
-```
-/kavach-review https://github.com/owner/repo/pull/123
-```
-
-From the terminal:
-
-```bash
-node src/cli.ts run https://github.com/owner/repo/pull/123
-node src/cli.ts publish --run .pr-architect/runs/123-abc1234 --dry-run
-```
+---
 
 ## How it works
 
@@ -92,8 +87,8 @@ PR URL
 The CLI does every deterministic step; Claude Code does the judgement. There is no
 API key and no LLM client — that is why it is cheap.
 
-**Claude never fetches the diff itself.** A 37-file PR is ~193,000 tokens of raw
-patch. `cli.ts run` budgets it down to 60k before Claude sees anything, keeping the
+**Claude never fetches the diff itself.** A real 37-file PR is ~193,000 tokens of
+raw patch. `cli.ts run` budgets it to 60k before Claude sees anything, keeping the
 highest-signal files whole and truncating the rest at hunk boundaries so line
 numbers stay valid.
 
@@ -126,7 +121,7 @@ Uncertain observations are never presented as defects:
 | < 0.5 | either | dropped |
 
 Reviews are always posted as `COMMENT`, never `REQUEST_CHANGES`. **Kavach never
-blocks a merge**, even on Critical findings.
+blocks a merge**, even on Critical findings. A human always decides.
 
 ### Never spams
 
@@ -136,12 +131,38 @@ blocks a merge**, even on Critical findings.
 - a finding on a line outside the diff moves to the summary rather than failing
   the whole review
 
+---
+
+## Works with any stack
+
+React · Next.js · Node · Python · Go · Java · Rust · PHP · Ruby · or a mix.
+
+Open a new project, paste a PR link, and it works. On first run Kavach silently
+detects the language, framework, package manager, test framework and monorepo
+layout, then writes `.pr-architect/config.json`. **It never asks you questions
+about your project.**
+
+### Teach it your project's rules
+
+Write plain sentences in `.pr-architect/rules.md`:
+
+```markdown
+- All database access goes through `repositories/`, never direct SQL in components.
+- Every API route requires `requireAuth()` as the first line.
+- Money values are integers in cents, never floats.
+```
+
+Every reviewer reads this and enforces it. It is the highest-value thing you can
+do to improve review quality.
+
+---
+
 ## Configuration
 
 Optional. Kavach works with none.
 
 ```bash
-/kavach-config                                  # show
+/kavach-config                                  # show current settings
 /kavach-config review.maxComments=25
 /kavach-config budget.maxContextTokens=120000
 /kavach-config review.neverReviewers=accessibility
@@ -149,17 +170,44 @@ Optional. Kavach works with none.
 /kavach-setup status                            # what credentials are configured
 ```
 
-`.pr-architect/rules.md` and `knowledge.md` are yours — write project rules there
-and every reviewer will honor them. Kavach never overwrites either file.
+| Setting | Default | Effect |
+|---|---|---|
+| `review.maxComments` | `15` | Cap on inline comments per PR |
+| `review.mode` | `standard` | `deep` uses more reviewers and a larger budget |
+| `review.minConfidenceForIssue` | `0.8` | Above this a finding is stated as an Issue |
+| `review.minConfidenceToComment` | `0.5` | Below this a finding is dropped |
+| `review.alwaysReviewers` | `security` | Always run, whatever the files |
+| `review.neverReviewers` | *(empty)* | Never run |
+| `budget.maxContextTokens` | `60000` | Larger is more thorough but slower |
+| `notify.googleChat` | `true` | Set `false` to stop Chat messages |
+
+---
 
 ## Development
 
-Zero runtime dependencies. Node 24 runs the TypeScript directly — no build step.
+Zero runtime dependencies. Node 24 runs the TypeScript directly — no build step,
+no bundler, no `npm install`.
 
 ```bash
-node --test test/*.test.ts
+node --test test/*.test.ts     # 60 tests
+node src/cli.ts run <pr-url>
+node src/cli.ts publish --run <dir> --dry-run
 ```
 
-## License
+| Path | What it holds |
+|---|---|
+| `src/diff/` | patch parsing and the token budget |
+| `src/review/` | routing, dedupe, confidence policy |
+| `src/github/` | REST client, PR fetch, review publish |
+| `src/store/` | config, credentials, migrations |
+| `skills/reviewers/` | the eight reviewer rubrics (plain markdown) |
 
-MIT
+---
+
+<div align="center">
+
+Built at [Thinkitive](https://github.com/O-Thinkitive-M) · MIT
+
+<sub>The shield is Marvel's Captain America shield, used as an internal project mark.</sub>
+
+</div>
