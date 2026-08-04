@@ -8,7 +8,7 @@
 
 [![version](https://img.shields.io/badge/version-1.0.0-2b7489)](https://github.com/O-Thinkitive-M/kavach)
 [![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#development)
-[![tests](https://img.shields.io/badge/tests-60%20passing-brightgreen)](test/)
+[![tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)](test/)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.18-339933)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -123,13 +123,26 @@ Uncertain observations are never presented as defects:
 Reviews are always posted as `COMMENT`, never `REQUEST_CHANGES`. **Kavach never
 blocks a merge**, even on Critical findings. A human always decides.
 
-### Never spams
+### Never spams, never hides
 
 - duplicate findings from multiple reviewers merge into one comment
 - a fingerprint already posted is never posted again, even after a rebase
-- comments are capped (default 15); the rest go in the review summary
+- comments are capped (default 15) — but **Critical and High findings are always
+  posted**, even past the cap, so a serious defect is never buried in a summary
+- overflow is listed in the review body with the cap explained
 - a finding on a line outside the diff moves to the summary rather than failing
   the whole review
+
+### Handles the awkward cases
+
+| Situation | Behaviour |
+|---|---|
+| PR is in a language the project isn't configured for | Reviewers are told, and fall back to general engineering review with lower confidence |
+| PR is already merged or closed | Says so in the review, still posts |
+| Draft PR | Reviewed as work in progress, leaning toward questions |
+| Empty PR, or only generated/binary files | Publishes an honest "nothing reviewable" summary rather than failing |
+| Hundreds of findings | Severity-ordered; body truncated to GitHub's 65536 limit instead of 422-ing |
+| More than 1000 changed files | Fetches the first 1000 and says so |
 
 ---
 
@@ -144,22 +157,31 @@ layout, then writes `.pr-architect/config.json`.
 ### Set up a project properly — `/kavach-init`
 
 Optional, once per project folder. Kavach detects the mechanical details itself
-and asks four short questions with its guesses pre-filled:
+and asks a few short questions with its guesses pre-filled:
 
 - **Is this stack right?** — *Next.js · TypeScript · pnpm · Vitest*
 - **What is this project?** — *"Patient scheduling API for a healthcare provider"*
 - **What matters most?** — *auth, PHI handling, data migrations*
 - **Any rules to enforce?** — *"All DB access goes through `repositories/`"*
+- **Keep a day-wise review log?** — off by default
 
 Answers go into every reviewer's context, so findings are grounded in what your
 project actually is. Re-run any time to update; `/kavach-init reset` starts over.
 
 **Reviews after this never ask you anything.**
 
-### Day-wise review log
+### Day-wise review log — optional
 
-Every review appends to `.pr-architect/logs/YYYY-MM-DD.md` — PR, reviewers used,
-files covered, findings and how each was posted.
+Off by default. Enable per project during `/kavach-init`, or with
+`/kavach-config notify.reviewLog=true`. Each review then appends one compact line
+per finding to `.pr-architect/logs/YYYY-MM-DD.md`:
+
+```
+### 14:36 [#482 Add patient search endpoint](…) @dev
+security,typescript · 12/18 files · H2 M3 L1 · 7 posted · [review](…)
+- `H/I` src/api/search.ts:34 — Unparameterized SQL query
+- `M/Q` src/api/search.ts:51 — Could this return unbounded rows
+```
 
 ```bash
 /kavach-log             # today
@@ -204,6 +226,7 @@ Optional. Kavach works with none.
 | `review.neverReviewers` | *(empty)* | Never run |
 | `budget.maxContextTokens` | `60000` | Larger is more thorough but slower |
 | `notify.googleChat` | `true` | Set `false` to stop Chat messages |
+| `notify.reviewLog` | `false` | Day-wise markdown log, opt-in per project |
 
 ---
 
@@ -213,7 +236,7 @@ Zero runtime dependencies. Node 24 runs the TypeScript directly — no build ste
 no bundler, no `npm install`.
 
 ```bash
-node --test test/*.test.ts     # 60 tests
+node --test test/*.test.ts     # 114 tests
 node src/cli.ts run <pr-url>
 node src/cli.ts publish --run <dir> --dry-run
 ```

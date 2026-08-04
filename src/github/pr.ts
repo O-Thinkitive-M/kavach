@@ -2,13 +2,16 @@
 
 import { gh, ghPaged, type ParsedPrUrl } from './client.ts';
 import { parsePatch, commentableLines } from '../diff/parse.ts';
-import { KavachError, type ContextFile, type FileStatus, type PrMeta } from '../types.ts';
+import type { ContextFile, FileStatus, PrMeta } from '../types.ts';
 
 interface ApiPr {
   number: number;
   title: string;
   body: string | null;
   draft?: boolean;
+  state?: string;
+  merged?: boolean;
+  merged_at?: string | null;
   user: { login: string } | null;
   head: { ref: string; sha: string };
   base: { ref: string; sha: string };
@@ -54,17 +57,25 @@ export async function fetchPr(ref: ParsedPrUrl): Promise<PrMeta> {
     deletions: pr.deletions,
     changedFiles: pr.changed_files,
     draft: Boolean(pr.draft),
+    state: pr.merged || pr.merged_at ? 'merged' : pr.state === 'closed' ? 'closed' : 'open',
   };
 }
 
 export async function fetchFiles(ref: ParsedPrUrl): Promise<ContextFile[]> {
   const { owner, repo, number } = ref;
-  const files = await ghPaged<ApiFile>(`/repos/${owner}/${repo}/pulls/${number}/files`);
+  const { items: files, truncated } = await ghPaged<ApiFile>(
+    `/repos/${owner}/${repo}/pulls/${number}/files`,
+  );
 
-  if (files.length === 0) {
-    throw new KavachError('fetch', `PR #${number} has no changed files to review.`);
+  if (truncated) {
+    process.stderr.write(
+      `  note: this PR has more than 1000 changed files; only the first 1000 were fetched.\n`,
+    );
   }
 
+  // An empty PR is a legitimate state (branch reset, everything reverted), not a
+  // failure. Returning [] lets the run finish and publish a "nothing to review"
+  // summary, which is what the orchestrator skill requires.
   return files.map((f) => {
     const hunks = parsePatch(f.patch);
     return {
@@ -86,7 +97,10 @@ export async function fetchFiles(ref: ParsedPrUrl): Promise<ContextFile[]> {
 /** Existing review comments, so publish can avoid reposting. */
 export async function fetchReviewComments(ref: ParsedPrUrl): Promise<ApiReviewComment[]> {
   const { owner, repo, number } = ref;
-  return ghPaged<ApiReviewComment>(`/repos/${owner}/${repo}/pulls/${number}/comments`);
+  const { items } = await ghPaged<ApiReviewComment>(
+    `/repos/${owner}/${repo}/pulls/${number}/comments`,
+  );
+  return items;
 }
 
 function normalizeStatus(s: string): FileStatus {

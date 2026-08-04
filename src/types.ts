@@ -5,7 +5,6 @@
 
 export const KAVACH_VERSION = '1.0.0';
 export const CONTEXT_SCHEMA = 1;
-export const FINDINGS_SCHEMA = 1;
 export const CONFIG_SCHEMA = 2;
 
 export type Severity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Suggestion';
@@ -91,6 +90,8 @@ export interface PrMeta {
   deletions: number;
   changedFiles: number;
   draft: boolean;
+  /** Reviewing a merged PR is usually a mistake; the skill says so. */
+  state: 'open' | 'closed' | 'merged';
 }
 
 export interface RouteResult {
@@ -112,6 +113,7 @@ export interface PriorFinding {
   fingerprint: string;
   path: string;
   line: number;
+  title: string;
 }
 
 export interface KnowledgeBundle {
@@ -200,6 +202,8 @@ export interface KavachConfig {
     googleChat: boolean;
     onError: boolean;
     iconUrl: string;
+    /** Day-wise markdown log. Opt-in: off unless the project asks for it. */
+    reviewLog: boolean;
   };
   ignore: string[];
 }
@@ -209,6 +213,8 @@ export interface HistoryEntry {
   headSha: string;
   at: string;
   fingerprints: string[];
+  /** What was said, so a later run can tell Claude rather than just dedupe it. */
+  reported?: PriorFinding[];
 }
 
 export type Stage = 'fetch' | 'review' | 'publish';

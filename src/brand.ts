@@ -121,18 +121,3 @@ export function banner(subtitle = 'autonomous PR review'): string {
   lines[5] += c.grey(`   ${subtitle}`);
   return lines.join('\n');
 }
-
-export function severityColor(severity: string, text: string): string {
-  switch (severity) {
-    case 'Critical':
-      return c.red(text);
-    case 'High':
-      return c.red(text);
-    case 'Medium':
-      return c.yellow(text);
-    case 'Low':
-      return c.grey(text);
-    default:
-      return c.blue(text);
-  }
-}

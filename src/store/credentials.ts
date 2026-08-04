@@ -7,7 +7,7 @@
 // Tokens are keyed by owner (org or user) as well as a default, which lets one
 // machine review work and personal repos with different tokens.
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -135,8 +135,4 @@ export function credentialsStatus(owner?: string): {
     tokenSource: envToken ? 'env' : ownerToken ? 'owner' : creds.githubToken ? 'default' : 'none',
     path: credentialsPath(),
   };
-}
-
-export function credentialsExist(): boolean {
-  return existsSync(credentialsPath());
 }

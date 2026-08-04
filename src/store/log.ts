@@ -28,7 +28,6 @@ export interface LogEntry {
   context: ReviewContext;
   findings: ResolvedFinding[];
   posted: number;
-  summary: string;
   reviewUrl: string;
   dryRun: boolean;
   at?: Date;
@@ -39,70 +38,84 @@ export function appendLog(root: string, entry: LogEntry): string {
   const path = logPath(root, at);
   mkdirSync(logsDir(root), { recursive: true });
 
-  const header = `# Kavach review log — ${dayStamp(at)}\n`;
+  // Legend once per file, not once per entry.
+  const header =
+    `# Kavach — ${dayStamp(at)}\n\n` +
+    `<sub>severity C/H/M/L/S · kind I=issue Q=question S=suggestion</sub>\n`;
   const existing = existsSync(path) ? readFileSync(path, 'utf8') : header;
 
   writeFileSync(path, `${existing.trimEnd()}\n\n${renderEntry(entry, at)}`);
   return path;
 }
 
+/** Single letter per severity, so a finding line stays short. */
+const SEV_CODE: Record<string, string> = {
+  Critical: 'C',
+  High: 'H',
+  Medium: 'M',
+  Low: 'L',
+  Suggestion: 'S',
+};
+
+/** Single letter per kind: Issue / Suggestion / Question. */
+const KIND_CODE: Record<string, string> = {
+  issue: 'I',
+  suggestion: 'S',
+  question: 'Q',
+};
+
+/**
+ * One entry, deliberately compact: a header line, a stats line, and one line per
+ * finding. This file is read by humans and occasionally re-read by Claude, so
+ * every byte is context budget — no tables, no prose, no repeated field labels.
+ */
 function renderEntry(entry: LogEntry, at: Date): string {
-  const { context, findings, posted, summary, reviewUrl, dryRun } = entry;
+  const { context, findings, posted, reviewUrl, dryRun } = entry;
   const { pr, route, budget } = context;
 
   const time = at.toTimeString().slice(0, 5);
   const active = findings.filter((f) => f.kind !== 'dropped');
 
-  const counts = SEVERITIES.map((s) => ({
-    severity: s,
-    n: active.filter((f) => f.severity === s).length,
-  })).filter((c) => c.n > 0);
+  const counts = SEVERITIES.map((s) => {
+    const n = active.filter((f) => f.severity === s).length;
+    return n ? `${SEV_CODE[s]}${n}` : '';
+  })
+    .filter(Boolean)
+    .join(' ');
 
   const lines: string[] = [];
 
-  lines.push(`## ${time} · [#${pr.number} ${pr.title}](${pr.url})`);
-  lines.push('');
-  lines.push(`- **Repo**: \`${pr.owner}/${pr.repo}\` · branch \`${pr.branch}\` · by @${pr.author}`);
-  lines.push(`- **Reviewers**: ${route.reviewers.join(', ')} (${route.mode})`);
+  // Header carries the link, so the PR number and title cost nothing extra.
+  lines.push(`### ${time} [#${pr.number} ${trim(pr.title, 70)}](${pr.url}) @${pr.author}`);
+
+  const skipped = budget.filesSkipped ? `/${budget.filesIncluded + budget.filesSkipped}` : '';
   lines.push(
-    `- **Files**: ${budget.filesIncluded} of ${budget.filesIncluded + budget.filesSkipped} reviewed` +
-      `${budget.filesTruncated ? `, ${budget.filesTruncated} truncated` : ''}` +
-      ` · ${Math.round(budget.totalTokens / 1000)}k tokens`,
-  );
-  lines.push(
-    `- **Findings**: ${counts.length ? counts.map((c) => `${c.severity} ${c.n}`).join(' · ') : 'none'}`,
-  );
-  lines.push(
-    `- **Comments posted**: ${posted}${dryRun ? ' _(dry run — nothing sent)_' : ''}` +
-      `${reviewUrl && !dryRun ? ` · [view review](${reviewUrl})` : ''}`,
+    `${route.reviewers.join(',')} · ${budget.filesIncluded}${skipped} files · ` +
+      `${counts || 'clean'} · ${posted} posted` +
+      (dryRun ? ' · dry-run' : '') +
+      (reviewUrl && !dryRun ? ` · [review](${reviewUrl})` : ''),
   );
 
-  if (summary.trim()) {
-    lines.push('');
-    lines.push(`> ${summary.trim().replace(/\n+/g, ' ').slice(0, 400)}`);
+  for (const f of active.slice(0, MAX_LOGGED_FINDINGS)) {
+    // e.g. `H/I src/api.ts:34 Unparameterized SQL query`
+    lines.push(
+      `- \`${SEV_CODE[f.severity]}/${KIND_CODE[f.kind] ?? '?'}\` ` +
+        `${f.path}:${f.line} — ${trim(f.title, 70)}`,
+    );
   }
-
-  if (active.length > 0) {
-    lines.push('');
-    lines.push('| Severity | File | Finding | Posted as |');
-    lines.push('|---|---|---|---|');
-    for (const f of active.slice(0, 25)) {
-      lines.push(
-        `| ${f.severity} | \`${f.path}:${f.line}\` | ${escapeCell(f.title)} | ${f.kind} |`,
-      );
-    }
-    if (active.length > 25) {
-      lines.push(`| … | | _${active.length - 25} more_ | |`);
-    }
+  if (active.length > MAX_LOGGED_FINDINGS) {
+    lines.push(`- _+${active.length - MAX_LOGGED_FINDINGS} more_`);
   }
 
   lines.push('');
   return lines.join('\n');
 }
 
-/** Pipes and newlines would break the markdown table. */
-function escapeCell(text: string): string {
-  return text.replace(/\|/g, '\\|').replace(/\n/g, ' ').slice(0, 80);
+const MAX_LOGGED_FINDINGS = 20;
+
+function trim(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > max ? clean.slice(0, max - 1) + '…' : clean;
 }
 
 /** Reads back a day's log. Used by `kavach log --show`. */

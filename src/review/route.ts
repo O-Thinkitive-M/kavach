@@ -40,6 +40,9 @@ const EXT_REVIEWERS: Record<string, ReviewerName[]> = {
   yaml: ['security'],
 };
 
+/** Files whose content is prose or data, where code regexes only misfire. */
+const PROSE_EXT = new Set(['md', 'mdx', 'txt', 'rst', 'json', 'yaml', 'yml', 'lock', 'csv', 'svg']);
+
 const PATH_SIGNALS: Array<[RegExp, ReviewerName, string]> = [
   [/(^|\/)(auth|login|session|oauth|token)/i, 'security', 'auth-related paths'],
   [/(^|\/)(api|routes?|controllers?|handlers?)\//i, 'security', 'API surface'],
@@ -57,15 +60,28 @@ const PATH_SIGNALS: Array<[RegExp, ReviewerName, string]> = [
 const CONTENT_SIGNALS: Array<[RegExp, ReviewerName, string]> = [
   [/\buse(Effect|State|Memo|Callback|Ref|Context|Reducer)\b/, 'react', 'React hooks'],
   [/\b(useLayoutEffect|StrictMode|createPortal)\b/, 'react', 'React lifecycle APIs'],
-  [/\b(password|secret|token|jwt|apiKey|api_key|crypto|hash|encrypt)\b/i, 'security', 'credential handling'],
-  [/\b(eval|innerHTML|dangerouslySetInnerHTML|exec|child_process)\b/, 'security', 'dangerous APIs'],
-  [/\b(SELECT|INSERT|UPDATE|DELETE)\b.*\b(FROM|INTO|SET)\b/i, 'security', 'raw SQL'],
+  // Anchored to code shapes (assignment, property, call) so ordinary prose like
+  // "a token of appreciation" does not route a docs PR to the security reviewer.
+  [
+    /\b(password|secret|apiKey|api_key|jwt|accessToken|refreshToken)\s*[:=]|\.(password|secret|token)\b|\bcrypto\.|\bbcrypt\b/,
+    'security',
+    'credential handling',
+  ],
+  [/\b(eval|innerHTML|dangerouslySetInnerHTML|child_process)\b|\bexec\s*\(/, 'security', 'dangerous APIs'],
+  // Case-sensitive and same-line: real SQL is uppercase by convention, and the
+  // case-insensitive version matched "We UPDATE the docs from time to time".
+  [/\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^\n]*\b(FROM|INTO|SET|WHERE|VALUES)\b/, 'security', 'raw SQL'],
   [/for\s*\(.*\)\s*\{[^}]*await|\.map\(.*await/s, 'performance', 'await inside a loop'],
   [/\b(useMemo|useCallback|memo|lazy|Suspense)\b/, 'performance', 'memoization APIs'],
   [/\baria-|role=|tabIndex|alt=/, 'accessibility', 'ARIA/semantic attributes'],
   [/<div[^>]*onClick|<span[^>]*onClick/, 'accessibility', 'click handlers on non-interactive elements'],
-  [/\b(describe|it|test|expect)\s*\(/, 'testing', 'test blocks'],
-  [/\b(interface|type|enum|generic|extends|implements)\b/, 'typescript', 'type declarations'],
+  [/^\s*(describe|it|test|expect)\s*\(|\bexpect\([^)]*\)\.\w/, 'testing', 'test blocks'],
+  // Declaration shapes, not the English words "type" or "generic".
+  [
+    /\b(interface\s+[A-Z]|type\s+[A-Z]\w*\s*=|enum\s+[A-Z]|extends\s+[A-Z]|implements\s+[A-Z])/,
+    'typescript',
+    'type declarations',
+  ],
   [/\bas any\b|\b: any\b|@ts-ignore|@ts-expect-error/, 'typescript', 'type escapes'],
 ];
 
@@ -94,11 +110,16 @@ export function routeReviewers(
       if (pattern.test(file.path)) bump(reviewer, 3, why);
     }
 
-    const added = addedLines(file.hunks)
-      .map((l) => l.t)
-      .join('\n');
-    for (const [pattern, reviewer, why] of CONTENT_SIGNALS) {
-      if (pattern.test(added)) bump(reviewer, 3, why);
+    // Content signals describe code shapes, so running them over markdown or
+    // JSON produces confident nonsense — a docs-only PR was routing to the
+    // SQL-injection reviewer.
+    if (!PROSE_EXT.has(ext)) {
+      const added = addedLines(file.hunks).map((l) => l.t);
+      for (const [pattern, reviewer, why] of CONTENT_SIGNALS) {
+        // Per line: a `.*` across joined lines matched a SELECT on line 1
+        // against a FROM 400 lines later.
+        if (added.some((line) => pattern.test(line))) bump(reviewer, 3, why);
+      }
     }
 
     // Substantial deletions are the strongest regression signal we have.
@@ -151,15 +172,37 @@ function isReviewer(name: string): name is ReviewerName {
   return (REVIEWERS as string[]).includes(name);
 }
 
-/** Relevance multiplier used by the budget to rank files. */
+/** Test fixtures and helpers: real files, but the last thing a reviewer needs. */
+const LOW_VALUE_PATH = /(^|\/)(__(tests?|mocks?|fixtures?|snapshots?)__|fixtures?|mocks?|e2e)\//i;
+const HELPER_FILE = /\.(util|helper|fixture|mock|stub)\.[jt]sx?$/i;
+const TEST_FILE = /\.(test|spec)\.[jt]sx?$|(^|\/)(tests?|specs?)\//i;
+
+/**
+ * Relevance multiplier used by the budget to rank files.
+ *
+ * The spread matters as much as the ordering: the budget multiplies this by a
+ * damped churn term, so a narrow 1–3 range would let a large test helper outrank
+ * a small change to production code. Application source must win.
+ */
 export function fileRelevance(file: ContextFile, selected: ReviewerName[]): number {
   const ext = file.path.split('.').pop()?.toLowerCase() ?? '';
   const forExt = EXT_REVIEWERS[ext] ?? [];
   const overlap = forExt.filter((r) => selected.includes(r)).length;
 
-  let score = 1 + overlap;
+  let score = 2 + overlap * 2;
   for (const [pattern, reviewer] of PATH_SIGNALS) {
-    if (selected.includes(reviewer) && pattern.test(file.path)) score += 1;
+    if (selected.includes(reviewer) && pattern.test(file.path)) score += 2;
   }
-  return score;
+
+  // Docs and data carry little review value relative to their size.
+  if (['md', 'mdx', 'txt', 'json', 'yaml', 'yml', 'lock'].includes(ext)) score *= 0.4;
+
+  // Test code is worth reviewing, but a bug in production code is worth more.
+  // Applied even when the `testing` reviewer ran, otherwise a test-heavy PR
+  // crowds out the source files those tests exercise.
+  if (HELPER_FILE.test(file.path)) score *= 0.2;
+  else if (TEST_FILE.test(file.path) || LOW_VALUE_PATH.test(file.path)) score *= 0.35;
+  else score *= 1.5; // production code
+
+  return Math.max(0.2, score);
 }

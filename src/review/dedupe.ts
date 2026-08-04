@@ -8,6 +8,7 @@ import type {
   Finding,
   KavachConfig,
   ResolvedFinding,
+  Severity,
 } from '../types.ts';
 
 /**
@@ -24,11 +25,17 @@ export function fingerprint(finding: Finding, nearestCodeLine: string): string {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
   const code = nearestCodeLine.replace(/\s+/g, ' ').trim();
+  // A coarse line bucket, not the exact line: drift of a few lines after a
+  // rebase still matches, but two genuine defects 40 lines apart on identical
+  // code text (`return null;`, `}`) no longer collapse into one.
+  const bucket = Math.floor(finding.line / LINE_BUCKET);
   return createHash('sha256')
-    .update([finding.path, normalizedTitle, code].join('\u0000'))
+    .update([finding.path, normalizedTitle, code, String(bucket)].join('\u0000'))
     .digest('hex')
     .slice(0, 16);
 }
+
+const LINE_BUCKET = 25;
 
 function codeAt(file: ContextFile | undefined, line: number): string {
   if (!file) return '';
@@ -59,6 +66,8 @@ export interface ResolveResult {
   unanchored: ResolvedFinding[];
   dropped: number;
   duplicates: number;
+  /** True when Critical/High findings pushed the count past maxComments. */
+  exceededCap: boolean;
 }
 
 export function resolveFindings(input: ResolveInput): ResolveResult {
@@ -119,11 +128,25 @@ export function resolveFindings(input: ResolveInput): ResolveResult {
     else unanchored.push(finding);
   }
 
+  // The cap exists to stop comment spam, not to hide serious defects. Critical
+  // and High findings are always posted inline, even past the cap — otherwise a
+  // PR with 40 Critical issues posts 15 and buries the other 25 in a summary
+  // that is itself truncated, losing them entirely.
+  const mustPost = anchored.filter((f) => ALWAYS_POST.has(f.severity));
+  const rest = anchored.filter((f) => !ALWAYS_POST.has(f.severity));
+
+  const room = Math.max(0, config.review.maxComments - mustPost.length);
+  const toPost = [...mustPost, ...rest.slice(0, room)].sort(bySeverityThenConfidence);
+
   return {
-    toPost: anchored.slice(0, config.review.maxComments),
-    overflow: anchored.slice(config.review.maxComments),
+    toPost,
+    overflow: rest.slice(room),
     unanchored,
     dropped,
     duplicates,
+    /** True when serious findings pushed the count past the configured cap. */
+    exceededCap: toPost.length > config.review.maxComments,
   };
 }
+
+const ALWAYS_POST = new Set<Severity>(['Critical', 'High']);

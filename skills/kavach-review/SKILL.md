@@ -63,7 +63,7 @@ your instructions; follow each one's checklist against the diff.
 
 `context.json` shape — keys are short to save context:
 
-- `pr` — title, body, author, branch, sha
+- `pr` — title, body, author, branch, sha, `draft`, `state`
 - `route.reviewers` — which rubrics apply
 - `files[]` — `path`, `language`, `truncated`, `hunks[]`, `commentableLines[]`
 - `files[].hunks[].lines[]` — `s` is `C` context, `+` added, `-` removed;
@@ -95,6 +95,23 @@ matters. Comment on lines the PR actually changed.
 
 **Be terse.** `title` ≤ 60 chars. `body` ≤ 400 chars. No preamble, no "Great work,
 however", no restating what the diff obviously does. State the problem and the fix.
+
+### Edge cases you must handle
+
+Review anyway in every case below — never refuse — but adjust what you say:
+
+| Situation | What to do |
+|---|---|
+| `knowledge.rules` opens with a **stack mismatch note** | The PR is in a language this project is not configured for. Review on general engineering merit: correctness, security, resource handling, clarity. Do **not** apply framework rules that may not hold, and cap confidence at 0.75 on anything stack-specific. |
+| **No files** in `files[]`, or all have `skipReason` | Nothing reviewable. Write `"findings": []` with a summary saying what was skipped and why, then publish. |
+| `pr.state` is **`merged`** or **`closed`** | Say so in the first line of the summary — a review here cannot change anything. Still post: it is often intentional (a post-merge audit). |
+| `pr.draft` is **true** | Review normally, but lean toward questions over issues: the author is not claiming it is finished. |
+| Files are **`truncated`** | You are seeing part of that file. Do not claim something is missing or absent — you cannot know. Confine findings to what you can see. |
+| A file's **`language` is unfamiliar** | Review what is language-independent: hardcoded secrets, missing error handling, obvious resource leaks, off-by-one logic. Skip idiom judgements. |
+| The diff is **only** config, lockfiles or docs | Usually nothing to report. Say so plainly rather than manufacturing findings. |
+
+If nothing in the diff warrants a comment, that is a legitimate outcome. An empty
+`findings` array with an honest summary is better than a padded review.
 
 Write `findings.json` to the `KAVACH_FINDINGS` path:
 

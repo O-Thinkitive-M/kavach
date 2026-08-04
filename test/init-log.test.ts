@@ -123,6 +123,27 @@ test('--reset clears the previous answers', async () => {
   assert.ok(!config.project.focusAreas?.length);
 });
 
+test('the review log is OFF unless the project opts in', async () => {
+  await init({ ...base, root });
+  assert.equal(loadConfig(root).config.notify.reviewLog, false);
+
+  await init({ ...base, root, logs: 'true' });
+  assert.equal(loadConfig(root).config.notify.reviewLog, true);
+
+  await init({ ...base, root, logs: 'false' });
+  assert.equal(loadConfig(root).config.notify.reviewLog, false);
+});
+
+test('an older config without the flag defaults to logging off', () => {
+  const { config } = migrateConfig({ schema: 2, notify: { googleChat: true } });
+  assert.equal(config.notify.reviewLog, false);
+});
+
+test('migration preserves an opted-in log setting', () => {
+  const { config } = migrateConfig({ schema: 1, notify: { reviewLog: true } });
+  assert.equal(config.notify.reviewLog, true);
+});
+
 // ---------- day-wise log ----------
 
 function context(number: number): ReviewContext {
@@ -176,7 +197,6 @@ test('a review is written to a file named for today', () => {
     context: context(1),
     findings: [finding()],
     posted: 1,
-    summary: 'Adds an endpoint.',
     reviewUrl: 'https://github.com/acme/api/pull/1#review',
     dryRun: false,
   });
@@ -185,11 +205,12 @@ test('a review is written to a file named for today', () => {
   assert.match(path, /\d{4}-\d{2}-\d{2}\.md$/);
 
   const log = readFileSync(path, 'utf8');
-  assert.match(log, new RegExp(`Kavach review log — ${dayStamp()}`));
+  assert.match(log, new RegExp(`Kavach — ${dayStamp()}`));
   assert.match(log, /#1 PR 1/);
-  assert.match(log, /acme\/api/);
   assert.match(log, /SQL injection/);
-  assert.match(log, /High 1/);
+  // Compact codes: H1 = one High; `H/I` = High severity, posted as an Issue.
+  assert.match(log, /H1/);
+  assert.match(log, /`H\/I`/);
 });
 
 test('a second review that day appends rather than replacing', () => {
@@ -197,7 +218,6 @@ test('a second review that day appends rather than replacing', () => {
     context: context(1),
     findings: [finding()],
     posted: 1,
-    summary: 'First',
     reviewUrl: '',
     dryRun: false,
   });
@@ -205,17 +225,17 @@ test('a second review that day appends rather than replacing', () => {
     context: context(2),
     findings: [],
     posted: 0,
-    summary: 'Second',
     reviewUrl: '',
     dryRun: false,
   });
 
   const log = readFileSync(logPath(root), 'utf8');
-  assert.equal((log.match(/^## /gm) ?? []).length, 2);
+  assert.equal((log.match(/^### /gm) ?? []).length, 2);
   assert.match(log, /#1 PR 1/);
   assert.match(log, /#2 PR 2/);
-  // Only one header, however many reviews land that day.
-  assert.equal((log.match(/^# Kavach review log/gm) ?? []).length, 1);
+  // Only one header and one legend, however many reviews land that day.
+  assert.equal((log.match(/^# Kavach —/gm) ?? []).length, 1);
+  assert.equal((log.match(/severity C\/H\/M\/L\/S/g) ?? []).length, 1);
 });
 
 test('a different day gets its own file', () => {
@@ -224,7 +244,6 @@ test('a different day gets its own file', () => {
     context: context(1),
     findings: [],
     posted: 0,
-    summary: '',
     reviewUrl: '',
     dryRun: false,
     at: yesterday,
@@ -233,7 +252,6 @@ test('a different day gets its own file', () => {
     context: context(2),
     findings: [],
     posted: 0,
-    summary: '',
     reviewUrl: '',
     dryRun: false,
   });
@@ -250,11 +268,10 @@ test('a dry run is logged and labelled as such', () => {
     context: context(1),
     findings: [finding()],
     posted: 1,
-    summary: '',
     reviewUrl: '',
     dryRun: true,
   });
-  assert.match(readFileSync(logPath(root), 'utf8'), /dry run/);
+  assert.match(readFileSync(logPath(root), 'utf8'), /dry-run/);
 });
 
 test('a review with no findings still appears in the log', () => {
@@ -262,13 +279,12 @@ test('a review with no findings still appears in the log', () => {
     context: context(9),
     findings: [],
     posted: 0,
-    summary: 'Nothing to flag.',
     reviewUrl: '',
     dryRun: false,
   });
   const log = readFileSync(logPath(root), 'utf8');
   assert.match(log, /#9 PR 9/);
-  assert.match(log, /Findings\*\*: none/);
+  assert.match(log, /clean/);
 });
 
 test('dropped findings are excluded from the log counts', () => {
@@ -276,25 +292,26 @@ test('dropped findings are excluded from the log counts', () => {
     context: context(1),
     findings: [finding(), finding({ kind: 'dropped', severity: 'Low', title: 'noise' })],
     posted: 1,
-    summary: '',
     reviewUrl: '',
     dryRun: false,
   });
   const log = readFileSync(logPath(root), 'utf8');
   assert.doesNotMatch(log, /noise/);
-  assert.match(log, /High 1/);
+  assert.match(log, /H1/);
 });
 
-test('a pipe in a finding title cannot break the markdown table', () => {
+test('a finding line stays on one line however long the title', () => {
   appendLog(root, {
     context: context(1),
-    findings: [finding({ title: 'a | b | c' })],
+    findings: [finding({ title: 'x'.repeat(200) })],
     posted: 1,
-    summary: '',
     reviewUrl: '',
     dryRun: false,
   });
-  assert.match(readFileSync(logPath(root), 'utf8'), /a \\\| b \\\| c/);
+  const log = readFileSync(logPath(root), 'utf8');
+  const findingLines = log.split('\n').filter((l) => l.startsWith('- `'));
+  assert.equal(findingLines.length, 1);
+  assert.ok(findingLines[0].length < 200, 'title should be trimmed');
 });
 
 test('reading a day with no log returns null instead of throwing', () => {
@@ -309,7 +326,6 @@ test('unrelated files in the logs dir are ignored', () => {
     context: context(1),
     findings: [],
     posted: 0,
-    summary: '',
     reviewUrl: '',
     dryRun: false,
   });

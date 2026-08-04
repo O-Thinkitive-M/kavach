@@ -8,11 +8,12 @@ import { parsePrUrl, setActiveOwner } from '../github/client.ts';
 import { fetchFiles, fetchPr } from '../github/pr.ts';
 import { applyBudget } from '../diff/budget.ts';
 import { routeReviewers } from '../review/route.ts';
-import { loadConfig, loadKnowledge, priorFingerprints, storePath } from '../store/config.ts';
+import { loadConfig, loadKnowledge, priorReported, storePath } from '../store/config.ts';
 import { banner, c } from '../brand.ts';
 import {
   CONTEXT_SCHEMA,
   KAVACH_VERSION,
+  type ContextFile,
   type KavachConfig,
   type KnowledgeBundle,
   type ReviewContext,
@@ -34,21 +35,83 @@ export interface RunOptions {
 function withProjectContext(
   knowledge: KnowledgeBundle,
   config: KavachConfig,
+  files: ContextFile[],
 ): KnowledgeBundle {
   const { summary, focusAreas } = config.project;
-  if (!summary && !focusAreas?.length) return knowledge;
+  const mismatch = stackMismatch(config, files);
+
+  if (!summary && !focusAreas?.length && !mismatch) return knowledge;
 
   const preamble = [
     summary ? `Project: ${summary}` : '',
     focusAreas?.length
       ? `Treat these areas as high-risk; be more thorough there: ${focusAreas.join(', ')}.`
       : '',
+    mismatch,
   ]
     .filter(Boolean)
     .join('\n');
 
   return { ...knowledge, rules: `${preamble}\n\n${knowledge.rules}`.trim() };
 }
+
+/**
+ * The project is configured for one stack but the PR changes another — a Python
+ * service in a mostly-React monorepo, or a repo whose detection was wrong.
+ * Silence here produces confident nonsense, so say it plainly and let Claude
+ * fall back to language-general review.
+ */
+export function stackMismatch(config: KavachConfig, files: ContextFile[]): string {
+  const reviewable = files.filter((f) => !f.skipReason && f.hunks.length > 0);
+  if (reviewable.length === 0) return '';
+
+  const declared = config.project.language;
+  if (!declared || declared === 'unknown') return '';
+
+  const languages = new Set(reviewable.map((f) => f.language));
+  const familiar = LANGUAGE_FAMILIES[declared] ?? new Set([declared]);
+  const foreign = [...languages].filter((l) => !familiar.has(l) && !NEUTRAL.has(l));
+
+  // Only worth saying when the PR is *mostly* unfamiliar, not when it merely
+  // touches one config file.
+  const foreignFiles = reviewable.filter((f) => foreign.includes(f.language)).length;
+  if (foreignFiles / reviewable.length < 0.6) return '';
+
+  return (
+    `Note: this project is configured as ${declared}` +
+    `${config.project.framework !== 'none' ? ` / ${config.project.framework}` : ''}, ` +
+    `but this PR is mostly ${[...new Set(foreign)].join(', ')}. ` +
+    'Review it on general engineering merit — correctness, security, clarity — and ' +
+    'do not apply framework-specific rules that may not hold here. Lower your ' +
+    'confidence on anything that depends on stack conventions you cannot verify.'
+  );
+}
+
+/** Languages that travel together and should not be flagged as foreign. */
+const LANGUAGE_FAMILIES: Record<string, Set<string>> = {
+  typescript: new Set(['typescript', 'tsx', 'javascript', 'jsx']),
+  javascript: new Set(['javascript', 'jsx', 'typescript', 'tsx']),
+  python: new Set(['python']),
+  go: new Set(['go']),
+  java: new Set(['java', 'kotlin']),
+  ruby: new Set(['ruby']),
+  php: new Set(['php']),
+  rust: new Set(['rust']),
+};
+
+/** Config, docs and styles appear in every stack; never a mismatch signal. */
+const NEUTRAL = new Set([
+  'json',
+  'yaml',
+  'markdown',
+  'css',
+  'scss',
+  'html',
+  'shell',
+  'sql',
+  'terraform',
+  'unknown',
+]);
 
 export async function run(opts: RunOptions): Promise<ReviewContext> {
   process.stderr.write(banner() + '\n\n');
@@ -74,7 +137,8 @@ export async function run(opts: RunOptions): Promise<ReviewContext> {
   const route = routeReviewers(rawFiles, config, mode);
   const { files, budget } = applyBudget(rawFiles, config, route.reviewers);
 
-  const prior = priorFingerprints(opts.root, pr.number);
+  // What Kavach already said on this PR, so Claude does not restate it.
+  const prior = priorReported(opts.root, pr.number);
 
   const context: ReviewContext = {
     kavachVersion: KAVACH_VERSION,
@@ -83,8 +147,8 @@ export async function run(opts: RunOptions): Promise<ReviewContext> {
     route,
     budget,
     files,
-    priorFindings: [...prior].map((fingerprint) => ({ fingerprint, path: '', line: 0 })),
-    knowledge: withProjectContext(loadKnowledge(opts.root), config),
+    priorFindings: prior,
+    knowledge: withProjectContext(loadKnowledge(opts.root), config, files),
   };
 
   const runDir = storePath(opts.root, 'runs', `${pr.number}-${pr.headSha.slice(0, 7)}`);

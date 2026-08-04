@@ -5,7 +5,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { detectConfig } from '../detect.ts';
 import { migrateConfig } from './migrate.ts';
-import type { HistoryEntry, KavachConfig, KnowledgeBundle } from '../types.ts';
+import type {
+  HistoryEntry,
+  KavachConfig,
+  KnowledgeBundle,
+  PriorFinding,
+} from '../types.ts';
 
 export const STORE_DIR = '.pr-architect';
 
@@ -139,4 +144,23 @@ export function priorFingerprints(root: string, pr: number): Set<string> {
     if (entry.pr === pr) for (const fp of entry.fingerprints) set.add(fp);
   }
   return set;
+}
+
+/**
+ * What was already reported on this PR, so Claude can avoid restating it.
+ * Capped: on a long-running PR the list would otherwise grow unbounded.
+ */
+export function priorReported(root: string, pr: number, limit = 30): PriorFinding[] {
+  const seen = new Set<string>();
+  const out: PriorFinding[] = [];
+  for (const entry of loadHistory(root).reverse()) {
+    if (entry.pr !== pr) continue;
+    for (const f of entry.reported ?? []) {
+      if (seen.has(f.fingerprint)) continue;
+      seen.add(f.fingerprint);
+      out.push(f);
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
 }

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Kavach CLI. Deterministic work only — Claude Code is the reasoning engine.
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { run } from './commands/run.ts';
 import { publish } from './commands/publish.ts';
@@ -23,7 +25,7 @@ const USAGE = `kavach — autonomous PR review
   kavach setup [--token <t>] [--webhook <url>] [--repo owner/repo] [--status]
       Store and verify credentials. Runs once per user.
 
-  kavach init [--detect] [--summary <s>] [--focus a,b] [--rules <text>] [--reset]
+  kavach init [--detect] [--summary <s>] [--focus a,b] [--rules <text>] [--logs true]
       Set up a project. Runs once per folder; re-run to update.
 
   kavach log [--show] [--day YYYY-MM-DD] [--list]
@@ -59,6 +61,7 @@ async function main(): Promise<number> {
       rules: { type: 'string' },
       'max-comments': { type: 'string' },
       strictness: { type: 'string' },
+      logs: { type: 'string' },
       day: { type: 'string' },
       list: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
@@ -109,6 +112,7 @@ async function main(): Promise<number> {
         rules: values.rules,
         maxComments: values['max-comments'],
         strictness: values.strictness,
+        logs: values.logs,
         status: values.status,
       });
       return 0;
@@ -132,6 +136,22 @@ async function main(): Promise<number> {
   }
 }
 
+/**
+ * Read the error-notification switch without going through loadConfig, which
+ * would create a .pr-architect/ directory as a side effect of failing.
+ */
+function errorNotificationsEnabled(): boolean {
+  try {
+    const rootIndex = process.argv.indexOf('--root');
+    const root = rootIndex > -1 ? process.argv[rootIndex + 1] : process.cwd();
+    const raw = readFileSync(join(root, '.pr-architect', 'config.json'), 'utf8');
+    return JSON.parse(raw).notify?.onError !== false;
+  } catch {
+    // No config yet, or unreadable: notifying is the safer default.
+    return true;
+  }
+}
+
 main()
   .then((code) => process.exit(code))
   .catch(async (err) => {
@@ -152,9 +172,11 @@ main()
     process.stderr.write('\n' + c.red('  Kavach failed') + c.grey(` at ${stage}: `) + message + '\n');
 
     // Fail loud: the same webhook that carries successes carries failures, so a
-    // run never dies silently.
+    // run never dies silently — unless this project opted out.
     const target = process.argv.find((a) => a.includes('/pull/')) ?? '(no PR URL)';
-    await notifyError(stage, message, target).catch(() => {});
+    if (errorNotificationsEnabled()) {
+      await notifyError(stage, message, target).catch(() => {});
+    }
 
     process.exit(1);
   });

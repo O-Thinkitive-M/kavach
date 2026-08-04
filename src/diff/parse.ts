@@ -21,7 +21,15 @@ export function parsePatch(patch: string | undefined | null): Hunk[] {
   let oldLine = 0;
   let newLine = 0;
 
-  for (const raw of patch.split('\n')) {
+  const rawLines = patch.split('\n');
+  // A patch ending in a newline yields a trailing empty segment; treating it as
+  // a context line invents a line the file does not have. GitHub strips these,
+  // but a locally generated or proxied diff will not.
+  if (rawLines.length > 1 && rawLines[rawLines.length - 1] === '') rawLines.pop();
+
+  for (const line of rawLines) {
+    // CRLF patches would otherwise carry \r into every line's text.
+    const raw = line.endsWith('\r') ? line.slice(0, -1) : line;
     const header = HUNK_HEADER.exec(raw);
     if (header) {
       current = { header: raw, lines: [] };

@@ -22,6 +22,8 @@ export interface InitOptions {
   rules?: string;
   maxComments?: string;
   strictness?: string;
+  /** 'true'/'false' — write a day-wise markdown review log for this project. */
+  logs?: string;
   status: boolean;
 }
 
@@ -94,6 +96,10 @@ export async function init(opts: InitOptions): Promise<void> {
   if (opts.maxComments) {
     const n = Number(opts.maxComments);
     if (Number.isFinite(n) && n > 0) config.review.maxComments = Math.floor(n);
+  }
+
+  if (opts.logs !== undefined) {
+    config.notify.reviewLog = opts.logs === 'true' || opts.logs === '1' || opts.logs === 'yes';
   }
 
   writeConfig(opts.root, config);
@@ -177,7 +183,8 @@ function printSummary(config: KavachConfig, root: string): void {
       c.grey(p.monorepo ? ' · monorepo\n' : '\n') +
       (p.summary ? c.grey(`  "${p.summary.slice(0, 90)}"\n`) : '') +
       (p.focusAreas?.length ? c.grey(`  focus: ${p.focusAreas.join(', ')}\n`) : '') +
-      c.grey(`  review: max ${config.review.maxComments} comments · ${config.review.mode}\n`) +
+      c.grey(`  review: max ${config.review.maxComments} comments · ${config.review.mode}`) +
+      c.grey(config.notify.reviewLog ? ' · day-wise log on\n' : '\n') +
       c.grey(`  set up: ${when}\n`) +
       c.grey(`  stored: ${storePath(root, 'config.json')}\n\n`),
   );

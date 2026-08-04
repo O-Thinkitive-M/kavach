@@ -48,6 +48,11 @@ user is confirming rather than typing. Keep it to these four:
    Examples: *"All DB access goes through repositories/"*, *"Every API route calls
    requireAuth() first"*, *"Money is integer cents, never floats"*.
 
+5. **Keep a review log for this project?** — off by default. When on, each review
+   appends one compact line per finding to `.pr-architect/logs/YYYY-MM-DD.md`.
+   Useful for standups and for tracking what was reviewed over a week; skip it if
+   the team does not want extra files in the repo.
+
 Also ask **strictness** only if they seem to want control:
 *lenient* (8 comments, high bar) · *balanced* (15, default) · *strict* (25, deep mode).
 
@@ -64,7 +69,8 @@ node "${CLAUDE_PLUGIN_ROOT}/src/cli.ts" init \
   --rules "All DB access goes through repositories/
 Every API route calls requireAuth() first
 Money is integer cents, never floats" \
-  --strictness balanced
+  --strictness balanced \
+  --logs true
 ```
 
 - `--rules` takes one rule per line; they are **appended** to

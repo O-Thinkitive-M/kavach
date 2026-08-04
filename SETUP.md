@@ -231,7 +231,7 @@ Shows a masked version (`ghp_…4a2f`), never the real token.
 ```
 
 Kavach looks at the folder first and figures out the mechanical details itself,
-then asks you **four short questions** — with its guesses already filled in, so
+then asks you **a few short questions** — with its guesses already filled in, so
 you're confirming rather than typing:
 
 | It asks | Example answer |
@@ -240,6 +240,7 @@ you're confirming rather than typing:
 | **What is this project?** | "Patient scheduling API for a healthcare provider" |
 | **What matters most in review?** | "auth, PHI handling, data migrations" |
 | **Any rules to enforce?** | "All DB access goes through `repositories/`" |
+| **Keep a review log?** | yes / no — off by default |
 
 **This happens once per project folder.** After it, paste a PR link and Kavach
 reviews silently — it never asks you anything again.
@@ -309,7 +310,13 @@ bigger budget.
 
 ## 8. The day-wise review log
 
-Every review is recorded in a dated file inside the project:
+**Off by default.** Turn it on when setting up a project — `/kavach-init` asks, or:
+
+```
+/kavach-config notify.reviewLog=true
+```
+
+Once on, every review is recorded in a dated file inside the project:
 
 ```
 .pr-architect/logs/2026-08-04.md
@@ -323,30 +330,31 @@ One file per day, appended to after each review. Open it directly, or ask:
 /kavach-log list            # which days have logs
 ```
 
-Each entry records the PR, which reviewers ran, how many files were reviewed,
-what was found, and how each finding was posted:
+Entries are deliberately terse — one line per finding, so a month of reviews stays
+small and cheap to read back:
 
 ```markdown
-## 14:36 · [#482 Add patient search endpoint](https://github.com/acme/api/pull/482)
+# Kavach — 2026-08-04
 
-- **Repo**: `acme/api` · branch `feat/search` · by @dev
-- **Reviewers**: security, typescript, business-logic (standard)
-- **Files**: 12 of 18 reviewed, 3 truncated · 41k tokens
-- **Findings**: High 2 · Medium 3 · Low 1
-- **Comments posted**: 7 · [view review](…)
+<sub>severity C/H/M/L/S · kind I=issue Q=question S=suggestion</sub>
 
-| Severity | File | Finding | Posted as |
-|---|---|---|---|
-| High | `src/api/search.ts:34` | Unparameterized SQL query | issue |
-| Medium | `src/api/search.ts:51` | Could this return unbounded rows? | question |
+### 14:36 [#482 Add patient search endpoint](https://github.com/acme/api/pull/482) @dev
+security,typescript,business-logic · 12/18 files · H2 M3 L1 · 7 posted · [review](…)
+- `H/I` src/api/search.ts:34 — Unparameterized SQL query
+- `M/Q` src/api/search.ts:51 — Could this return unbounded rows
+- `L/S` src/api/format.ts:12 — Consider extracting this helper
 ```
+
+`H/I` means High severity, posted as an Issue. `M/Q` is a Medium raised as a
+question.
 
 It's useful for a standup ("what did we review yesterday?"), for spotting patterns
 across a week, and as a record of what the agent actually did.
 
-Logs are local to each project. Add `.pr-architect/logs/` to that project's
-`.gitignore` if you don't want them committed — or commit them if the team wants
-shared history.
+Logs are local to each project. Commit them if the team wants shared history, or
+add `.pr-architect/logs/` to that project's `.gitignore` to keep them private.
+
+To turn logging off again: `/kavach-config notify.reviewLog=false`
 
 ---
 
@@ -424,6 +432,7 @@ shows current settings. To change one:
 | `review.neverReviewers` | *(empty)* | Never run these |
 | `budget.maxContextTokens` | `60000` | Bigger = more thorough but slower |
 | `notify.googleChat` | `true` | Set `false` to stop Chat messages |
+| `notify.reviewLog` | `false` | Set `true` for day-wise markdown logs |
 
 ### Making reviews quieter
 
@@ -522,6 +531,22 @@ for Critical findings. A human always decides.
 No. Comments are capped (15 by default), duplicate findings from different
 reviewers merge into one, and anything it's unsure about becomes a single question
 instead of an accusation. Re-running on the same PR posts nothing new.
+
+The one exception: **Critical and High findings are always posted**, even past the
+cap. A serious security bug should never be hidden in a collapsed summary because
+twelve style nits got there first. Everything else overflows into the review body
+with a note explaining how to raise the cap.
+
+**What if the PR isn't in my project's language?**
+It still gets reviewed. Kavach notices the mismatch, tells the reviewers, and they
+fall back to general engineering review — correctness, security, error handling —
+without applying framework rules that may not apply. Confidence is capped lower for
+anything stack-specific.
+
+**What about a merged, closed, or draft PR?**
+All reviewed. A merged or closed PR gets a note at the top of the review saying so.
+A draft is reviewed as work in progress, leaning toward questions rather than
+defect claims.
 
 **What if it's wrong about something?**
 It's designed to be cautious. Findings it can't verify are phrased as questions —

@@ -166,6 +166,8 @@ export function detectConfig(root: string): KavachConfig {
       googleChat: true,
       onError: true,
       iconUrl: DEFAULT_ICON,
+      // Opt-in. /kavach-init asks; until then no log files are written.
+      reviewLog: false,
     },
     ignore: seedIgnores(root),
   };

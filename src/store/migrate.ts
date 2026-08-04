@@ -24,6 +24,7 @@ const MIGRATIONS: Record<number, Migration> = {
       iconUrl:
         c.notify?.iconUrl ??
         'https://raw.githubusercontent.com/O-Thinkitive-M/kavach/main/assets/shield-128.png',
+      reviewLog: c.notify?.reviewLog ?? false,
     },
   }),
 };
@@ -49,8 +50,10 @@ export function migrateConfig(raw: Record<string, any>): {
     changed = true;
   }
 
+  // Compare by value: withDefaults always returns a fresh object, so reference
+  // identity would report "changed" on every read and rewrite a committed file.
   const filled = withDefaults(config);
-  return { config: filled, changed: changed || filled !== config };
+  return { config: filled, changed: changed || JSON.stringify(filled) !== JSON.stringify(config) };
 }
 
 /** Backfill any key a hand-edited config is missing, so callers can trust the shape. */
@@ -91,6 +94,7 @@ function withDefaults(c: Record<string, any>): KavachConfig {
       iconUrl:
         c.notify?.iconUrl ??
         'https://raw.githubusercontent.com/O-Thinkitive-M/kavach/main/assets/shield-128.png',
+      reviewLog: c.notify?.reviewLog ?? false,
     },
     ignore: Array.isArray(c.ignore) ? c.ignore : [],
   };

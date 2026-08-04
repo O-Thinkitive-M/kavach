@@ -3,7 +3,7 @@
 import { unlinkSync } from 'node:fs';
 import { loadConfig, storePath, writeConfig } from '../store/config.ts';
 import { c } from '../brand.ts';
-import { KavachError, type KavachConfig } from '../types.ts';
+import { KavachError, REVIEWERS, type KavachConfig } from '../types.ts';
 
 export interface ConfigOptions {
   root: string;
@@ -64,7 +64,19 @@ function setPath(config: KavachConfig, path: string, raw: string): void {
   } else if (typeof current === 'boolean') {
     node[leaf] = raw === 'true' || raw === '1';
   } else if (Array.isArray(current)) {
-    node[leaf] = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    const values = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    // A misspelled reviewer would otherwise be stored and silently ignored,
+    // leaving the user thinking they had excluded something.
+    if (leaf === 'alwaysReviewers' || leaf === 'neverReviewers') {
+      const unknown = values.filter((v) => !(REVIEWERS as string[]).includes(v));
+      if (unknown.length > 0) {
+        throw new KavachError(
+          'fetch',
+          `Unknown reviewer(s): ${unknown.join(', ')}. Valid: ${REVIEWERS.join(', ')}`,
+        );
+      }
+    }
+    node[leaf] = values;
   } else {
     node[leaf] = raw;
   }

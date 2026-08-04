@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { routeReviewers } from '../src/review/route.ts';
-import { applyBudget, matchesGlob, estimateTokens } from '../src/diff/budget.ts';
+import { routeReviewers, fileRelevance } from '../src/review/route.ts';
+import { applyBudget, matchesGlob, estimateTokens, fileTokens } from '../src/diff/budget.ts';
 import { resolveFindings, fingerprint } from '../src/review/dedupe.ts';
 import { classify, renderComment, higherSeverity } from '../src/review/policy.ts';
 import { migrateConfig } from '../src/store/migrate.ts';
@@ -95,7 +95,84 @@ test('every selected reviewer carries a reason', () => {
   for (const r of route.reviewers) assert.ok(route.reasons[r]?.length > 0, `${r} has no reason`);
 });
 
+test('prose does not trigger code-shaped reviewers', () => {
+  // Regression: /(SELECT|UPDATE).*(FROM|SET)/i matched "We UPDATE the docs from
+  // time to time", routing a docs-only PR to the SQL-injection reviewer.
+  const noSecurity = { ...config, review: { ...config.review, alwaysReviewers: [] } };
+  const docs = file(
+    'README.md',
+    '@@ -1,1 +1,3 @@\n+You can SELECT a plan FROM the pricing page.\n+We UPDATE the docs from time to time.',
+  );
+  assert.ok(!routeReviewers([docs], noSecurity).reviewers.includes('security'));
+});
+
+test('real SQL in source still triggers security', () => {
+  const noSecurity = { ...config, review: { ...config.review, alwaysReviewers: [] } };
+  const code = file(
+    'src/db.ts',
+    '@@ -1,1 +1,2 @@\n+const rows = await db.query(`SELECT id FROM users WHERE name = ${name}`);',
+  );
+  assert.ok(routeReviewers([code], noSecurity).reviewers.includes('security'));
+});
+
+test('a signal split across distant lines does not match', () => {
+  // Regression: added lines were joined with \n and matched with `.*`, so a
+  // SELECT on line 1 paired with a FROM hundreds of lines later.
+  const noSecurity = { ...config, review: { ...config.review, alwaysReviewers: [] } };
+  const patch =
+    '@@ -1,1 +1,5 @@\n+const SELECT = 1;\n+const a = 2;\n+const b = 3;\n+// pull FROM the queue';
+  assert.ok(!routeReviewers([file('src/a.ts', patch)], noSecurity).reviewers.includes('security'));
+});
+
 // ---------- budget ----------
+
+test('production source outranks a much larger test helper', () => {
+  // Regression: score was churn x relevance, and churn spans three orders of
+  // magnitude — so on a real 37-file PR every application source file was
+  // dropped and Claude saw only test helpers.
+  const helper = file(
+    'test/e2e/big-suite.util.ts',
+    `@@ -1,1 +1,400 @@\n${Array.from({ length: 400 }, (_, i) => `+  const line${i} = ${i};`).join('\n')}`,
+  );
+  const source = file('src/server/handler.ts', '@@ -1,1 +1,3 @@\n+const x = compute();\n+return x;');
+
+  const tight = { ...config, budget: { ...config.budget, maxContextTokens: 3000 } };
+  const { files: out } = applyBudget([helper, source], tight, ['typescript', 'testing']);
+
+  const kept = out.find((f) => f.path === source.path);
+  assert.equal(kept?.skipReason, null, 'source file was dropped in favour of a test helper');
+});
+
+test('relevance ranks source above tests above fixtures', () => {
+  const source = file('src/api/handler.ts', '@@ -1,1 +1,2 @@\n+const a = 1;');
+  const spec = file('src/api/handler.test.ts', '@@ -1,1 +1,2 @@\n+expect(a).toBe(1);');
+  const fixture = file('test/fixtures/data.util.ts', '@@ -1,1 +1,2 @@\n+export const d = 1;');
+
+  const rSource = fileRelevance(source, ['typescript', 'testing']);
+  const rSpec = fileRelevance(spec, ['typescript', 'testing']);
+  const rFixture = fileRelevance(fixture, ['typescript', 'testing']);
+
+  assert.ok(rSource > rSpec, `source ${rSource} should beat spec ${rSpec}`);
+  assert.ok(rSpec > rFixture, `spec ${rSpec} should beat fixture ${rFixture}`);
+});
+
+test('the budget measures the JSON Claude reads, not the raw patch', () => {
+  // Regression: costing hunksToPatch() understated the real payload by ~50%,
+  // because the per-line JSON objects cost ~2.3x the text they wrap.
+  const f = file(
+    'src/a.ts',
+    `@@ -1,1 +1,50 @@\n${Array.from({ length: 50 }, (_, i) => `+const x${i} = ${i};`).join('\n')}`,
+  );
+  const reported = fileTokens(f);
+  const serialized = JSON.stringify(f).length / 4;
+  const patchOnly = JSON.stringify(f.hunks.flatMap((h) => h.lines).map((l) => l.t)).length / 4;
+
+  // Must cost the serialized form, which is far larger than the text alone...
+  assert.ok(reported > patchOnly * 1.5, `${reported} should exceed raw text cost ${patchOnly}`);
+  // ...and land within the correction factor of plain bytes/4, never under it.
+  assert.ok(reported >= serialized, 'estimate must not undercount what is written');
+  assert.ok(reported <= serialized * 1.25, `${reported} unreasonably above ${serialized}`);
+});
 
 test('lockfiles and generated files are dropped', () => {
   const files = [
@@ -252,11 +329,19 @@ test('a fingerprint already posted is not reposted', () => {
   assert.equal(resolve([f], new Set([fp])).toPost.length, 0);
 });
 
-test('a line shift does not cause a repost', () => {
-  // Same finding, same code, different line number after a rebase.
+test('a small line shift does not cause a repost', () => {
+  // Same finding, same code, drifted a few lines by an edit above it.
   const before = fingerprint(finding({ line: 2 }), 'const b = risky();');
-  const after = fingerprint(finding({ line: 47 }), 'const b = risky();');
+  const after = fingerprint(finding({ line: 7 }), 'const b = risky();');
   assert.equal(before, after);
+});
+
+test('two defects far apart on identical code stay separate', () => {
+  // `return null;` and `}` recur constantly. Without a line component these
+  // collapse into one and the second finding is silently dropped.
+  const first = fingerprint(finding({ line: 10 }), 'return null;');
+  const second = fingerprint(finding({ line: 90 }), 'return null;');
+  assert.notEqual(first, second);
 });
 
 test('an existing comment body containing the fingerprint suppresses a repost', () => {
@@ -271,13 +356,44 @@ test('a line outside the diff is demoted, never posted', () => {
   assert.equal(out.unanchored.length, 1);
 });
 
-test('maxComments caps inline posts and the rest overflow', () => {
+test('maxComments caps ordinary findings and the rest overflow', () => {
   const many = Array.from({ length: 30 }, (_, i) =>
-    finding({ path: 'src/a.ts', line: 2, title: `Issue ${i}` }),
+    finding({ path: 'src/a.ts', line: 2, title: `Issue ${i}`, severity: 'Medium' }),
   );
   const out = resolve(many);
   assert.equal(out.toPost.length, config.review.maxComments);
   assert.ok(out.overflow.length > 0);
+  assert.equal(out.exceededCap, false);
+});
+
+test('Critical and High findings are never hidden by the cap', () => {
+  // A PR with 40 Critical issues must not post 15 and bury 25 in a summary
+  // that is itself truncated — those findings would vanish entirely.
+  const criticals = Array.from({ length: 40 }, (_, i) =>
+    finding({ path: 'src/a.ts', line: 2, title: `Critical ${i}`, severity: 'Critical' }),
+  );
+  const out = resolve(criticals);
+
+  assert.equal(out.toPost.length, 40, 'every Critical should be posted');
+  assert.equal(out.overflow.filter((f) => f.severity === 'Critical').length, 0);
+  assert.ok(out.exceededCap, 'should flag that the cap was deliberately exceeded');
+});
+
+test('serious findings take the inline slots ahead of minor ones', () => {
+  const mixed = [
+    ...Array.from({ length: 5 }, (_, i) =>
+      finding({ path: 'src/a.ts', line: 2, title: `High ${i}`, severity: 'High' }),
+    ),
+    ...Array.from({ length: 40 }, (_, i) =>
+      finding({ path: 'src/a.ts', line: 2, title: `Low ${i}`, severity: 'Low' }),
+    ),
+  ];
+  const out = resolve(mixed);
+
+  assert.equal(out.toPost.filter((f) => f.severity === 'High').length, 5);
+  assert.equal(out.toPost.length, config.review.maxComments);
+  // Overflow is only ever the less serious material.
+  assert.ok(out.overflow.every((f) => f.severity === 'Low'));
 });
 
 test('findings are ordered most severe first', () => {

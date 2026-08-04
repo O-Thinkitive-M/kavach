@@ -91,16 +91,26 @@ function explain(status: number, path: string, text: string): string {
   return `GitHub returned ${status} for ${path}: ${detail}`;
 }
 
-/** Paginate a list endpoint. Caps pages so a huge PR cannot stall a run. */
-export async function ghPaged<T>(path: string, maxPages = 10): Promise<T[]> {
+/**
+ * Paginate a list endpoint. Caps pages so a huge PR cannot stall a run.
+ * `truncated` is true when the cap was hit, so callers can report honestly
+ * rather than silently under-counting.
+ */
+export async function ghPaged<T>(
+  path: string,
+  maxPages = 10,
+): Promise<{ items: T[]; truncated: boolean }> {
   const out: T[] = [];
   const sep = path.includes('?') ? '&' : '?';
+  let truncated = false;
+
   for (let page = 1; page <= maxPages; page++) {
     const batch = await gh<T[]>(`${path}${sep}per_page=100&page=${page}`);
     out.push(...batch);
-    if (batch.length < 100) break;
+    if (batch.length < 100) return { items: out, truncated: false };
+    if (page === maxPages) truncated = true;
   }
-  return out;
+  return { items: out, truncated };
 }
 
 export interface ParsedPrUrl {
