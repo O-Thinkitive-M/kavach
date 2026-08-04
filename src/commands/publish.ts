@@ -85,8 +85,17 @@ export async function publish(opts: PublishOptions): Promise<void> {
     return;
   }
 
+  // Nothing new to say: a re-review after dedupe would otherwise post a second
+  // identical summary with no comments under it, which reads as noise on the PR.
+  const nothingNew =
+    comments.length === 0 && resolved.overflow.length === 0 && resolved.unanchored.length === 0;
+
   let reviewUrl = pr.url;
-  if (comments.length > 0 || body.trim()) {
+  if (nothingNew && resolved.duplicates > 0) {
+    process.stderr.write(
+      c.grey(`  ${resolved.duplicates} finding(s) already posted — nothing new to add\n`),
+    );
+  } else if (comments.length > 0 || body.trim()) {
     const review = await postReview(pr, body, comments);
     reviewUrl = review.html_url;
   }

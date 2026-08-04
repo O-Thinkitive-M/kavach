@@ -218,3 +218,24 @@ test('findings on a file that was skipped are demoted, never posted', () => {
   assert.equal(out.toPost.length, 0, 'cannot anchor to a file with no diff');
   assert.equal(out.unanchored.length, 3);
 });
+
+test('a re-review with nothing new posts no review at all', () => {
+  // Found in live testing: dedupe suppressed the comments but the empty summary
+  // review was still posted, leaving a redundant "Kavach review" on the PR.
+  const list = findings(3, 'High');
+  const first = resolve(list);
+  const posted = new Set(first.toPost.map((f) => f.fingerprint));
+
+  const second = resolveFindings({
+    findings: list,
+    files: [manyLines],
+    config,
+    priorFingerprints: posted,
+    existingBodies: [],
+  });
+
+  assert.equal(second.toPost.length, 0);
+  assert.equal(second.overflow.length, 0);
+  assert.equal(second.unanchored.length, 0);
+  assert.ok(second.duplicates > 0, 'should report why there is nothing to post');
+});
