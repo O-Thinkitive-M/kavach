@@ -1,10 +1,18 @@
-// .pr-architect/ store. Directory name is inherited from the original spec and
-// kept for migration safety even though the brand is Kavach.
+// Project state store.
+//
+// Everything lives per-user under ~/.kavach/projects/<key>/ — never inside the
+// repository. Your rules and settings follow you, are never committed, and are
+// invisible to teammates reviewing the same repo.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { detectConfig } from '../detect.ts';
 import { migrateConfig } from './migrate.ts';
+import {
+  ensureProjectDir,
+  hasLegacyStore,
+  legacyPath,
+  projectPath,
+} from './project.ts';
 import type {
   HistoryEntry,
   KavachConfig,
@@ -12,14 +20,34 @@ import type {
   PriorFinding,
 } from '../types.ts';
 
-export const STORE_DIR = '.pr-architect';
-
 export function storePath(root: string, ...parts: string[]): string {
-  return join(root, STORE_DIR, ...parts);
+  return projectPath(root, ...parts);
 }
 
 export function ensureStore(root: string): void {
-  mkdirSync(storePath(root, 'runs'), { recursive: true });
+  ensureProjectDir(root);
+}
+
+/**
+ * Move an older in-repo `.pr-architect/` into the user store, once.
+ *
+ * The originals are left in place: deleting files inside someone's repository
+ * is not Kavach's call. They are simply never read again.
+ */
+function migrateLegacyStore(root: string): boolean {
+  if (!hasLegacyStore(root) || existsSync(storePath(root, 'config.json'))) return false;
+
+  ensureStore(root);
+  for (const file of ['config.json', 'rules.md', 'knowledge.md', 'stack.md', 'history.json']) {
+    try {
+      if (existsSync(legacyPath(root, file))) {
+        copyFileSync(legacyPath(root, file), storePath(root, file));
+      }
+    } catch {
+      // A file that cannot be copied is not worth failing a review over.
+    }
+  }
+  return true;
 }
 
 /**
@@ -27,6 +55,7 @@ export function ensureStore(root: string): void {
  * zero-config: a repo it has never seen still reviews without asking anything.
  */
 export function loadConfig(root: string): { config: KavachConfig; created: boolean } {
+  const migrated = migrateLegacyStore(root);
   const path = storePath(root, 'config.json');
 
   if (existsSync(path)) {
@@ -34,7 +63,7 @@ export function loadConfig(root: string): { config: KavachConfig; created: boole
       const raw = JSON.parse(readFileSync(path, 'utf8'));
       const { config, changed } = migrateConfig(raw);
       if (changed) writeConfig(root, config);
-      return { config, created: false };
+      return { config, created: migrated };
     } catch {
       // A corrupt config must not block a review; regenerate it.
     }

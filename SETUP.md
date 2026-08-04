@@ -319,10 +319,10 @@ bigger budget.
 /kavach-config notify.reviewLog=true
 ```
 
-Once on, every review is recorded in a dated file inside the project:
+Once on, every review is recorded in a dated file in your Kavach folder:
 
 ```
-.pr-architect/logs/2026-08-04.md
+~/.kavach/projects/<project>/logs/2026-08-04.md
 ```
 
 One file per day, appended to after each review. Open it directly, or ask:
@@ -354,8 +354,8 @@ question.
 It's useful for a standup ("what did we review yesterday?"), for spotting patterns
 across a week, and as a record of what the agent actually did.
 
-Logs are local to each project. Commit them if the team wants shared history, or
-add `.pr-architect/logs/` to that project's `.gitignore` to keep them private.
+Logs are yours alone and live outside the repository, so there is nothing to
+gitignore and nothing a teammate can see.
 
 To turn logging off again: `/kavach-config notify.reviewLog=false`
 
@@ -376,27 +376,41 @@ that's per-folder, and takes a minute. Your credentials from
 It works with any stack — React, Next.js, Node, Python, Go, Java, Rust, PHP, Ruby,
 plain JavaScript, or a mix.
 
-### Should I commit the `.pr-architect/` folder?
+### Nothing to commit, nothing to gitignore
 
-| File | Commit it? | Why |
-|---|---|---|
-| `config.json` | ✅ Yes | Your team shares the same review settings |
-| `rules.md` | ✅ Yes | Project rules everyone benefits from |
-| `knowledge.md` | ✅ Yes | Shared context about the codebase |
-| `stack.md` | ✅ Yes | Detected stack info |
-| `runs/` | ❌ No | Temporary working files |
-| `logs/` | your call | Day-wise review history — commit for shared record, ignore to keep the repo clean |
+Kavach writes **nothing** into your repository. Every project's settings, rules,
+knowledge and history live under your own home folder:
 
-Add this to that project's `.gitignore`:
-
-```gitignore
-.pr-architect/runs/
-.pr-architect/logs/     # remove this line if you want shared review history
 ```
+~/.kavach/
+├── credentials.json              # your token and webhook, all projects
+└── projects/
+    ├── acme-api-3f8c1d92/        # keyed by git remote
+    │   ├── config.json           # your cap, strictness, reviewers
+    │   ├── rules.md              # your rules for this project
+    │   ├── knowledge.md          # your notes
+    │   ├── history.json          # what you already posted
+    │   └── logs/                 # if you enabled them
+    └── acme-web-a71b4e05/
+```
+
+This means:
+
+- **Your rules are yours.** A teammate reviewing the same repo has their own
+  settings — you can run strict where they run lenient.
+- **Nothing can leak into a commit.** No `.gitignore` entry needed.
+- **Settings follow the repo, not the folder.** Rename the directory or re-clone
+  it elsewhere and your configuration is still there, because the project is
+  identified by its git remote.
+
+> Upgrading from an older Kavach that used a `.pr-architect/` folder? Your
+> settings and rules are copied into the user store automatically on the next
+> run. The old folder is left alone — delete it whenever you like.
 
 ### Teaching Kavach your project's rules
 
-Open `.pr-architect/rules.md` in the project and write plain sentences:
+Add them during `/kavach-init`, or edit your `rules.md` for that project
+(`/kavach-config` prints the path). Plain sentences:
 
 ```markdown
 # Project rules
@@ -563,9 +577,10 @@ session. Nothing else. The only outbound message is the Chat summary, which
 contains findings, not source code.
 
 **Can my whole team use this?**
-Yes. Each person installs the plugin and runs `/kavach-setup` with their own
-token — comments appear under each person's name. Shared settings live in the
-committed `.pr-architect/config.json`.
+Yes, and each person's setup is independent. Everyone installs the plugin and runs
+`/kavach-setup` with their own token, so comments appear under their own name.
+Rules and settings are per user too — nothing is shared through the repository, so
+you can run strict on a project where a colleague runs lenient.
 
 **Does it work on private repos?**
 Yes, as long as your token has access. Add the SSO authorization step if your
@@ -597,7 +612,7 @@ And delete the token at <https://github.com/settings/tokens>.
 | Review thoroughly | `/kavach-review <url>` and say "deep" |
 | See settings | `/kavach-config` |
 | Change a setting | `/kavach-config review.maxComments=10` |
-| Teach it project rules | Edit `.pr-architect/rules.md` |
+| Teach it project rules | `/kavach-init`, or edit your `rules.md` |
 
 ---
 

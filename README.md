@@ -8,7 +8,7 @@
 
 [![version](https://img.shields.io/badge/version-1.0.0-2b7489)](https://github.com/O-Thinkitive-M/kavach)
 [![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#development)
-[![tests](https://img.shields.io/badge/tests-115%20passing-brightgreen)](test/)
+[![tests](https://img.shields.io/badge/tests-128%20passing-brightgreen)](test/)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.18-339933)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -147,7 +147,12 @@ React · Next.js · Node · Python · Go · Java · Rust · PHP · Ruby · or a 
 
 Open a new project, paste a PR link, and it works. On first run Kavach silently
 detects the language, framework, package manager, test framework and monorepo
-layout, then writes `.pr-architect/config.json`.
+layout.
+
+**Nothing is written into your repository.** Every project's settings, rules and
+history live under `~/.kavach/projects/<project>/`, keyed by the git remote — so
+they survive a rename or re-clone, and can never be committed by accident. Your
+rules are yours: a teammate reviewing the same repo has their own.
 
 ### Set up a project properly — `/kavach-init`
 
@@ -169,7 +174,7 @@ project actually is. Re-run any time to update; `/kavach-init reset` starts over
 
 Off by default. Enable per project during `/kavach-init`, or with
 `/kavach-config notify.reviewLog=true`. Each review then appends one compact line
-per finding to `.pr-architect/logs/YYYY-MM-DD.md`:
+per finding to `~/.kavach/projects/<project>/logs/YYYY-MM-DD.md`:
 
 ```
 ### 14:36 [#482 Add patient search endpoint](…) @dev
@@ -185,7 +190,8 @@ security,typescript · 12/18 files · H2 M3 L1 · 7 posted · [review](…)
 
 ### Teach it your project's rules
 
-Write plain sentences in `.pr-architect/rules.md`:
+Add them with `/kavach-init`, or edit your own `rules.md` for that project
+(`/kavach-config` prints the path). Plain sentences:
 
 ```markdown
 - All database access goes through `repositories/`, never direct SQL in components.
@@ -240,7 +246,7 @@ Zero runtime dependencies. Node 24 runs the TypeScript directly — no build ste
 no bundler, no `npm install`.
 
 ```bash
-node --test test/*.test.ts     # 115 tests
+node --test test/*.test.ts     # 128 tests
 node src/cli.ts run <pr-url>
 node src/cli.ts publish --run <dir> --dry-run
 ```
@@ -250,7 +256,7 @@ node src/cli.ts publish --run <dir> --dry-run
 | `src/diff/` | patch parsing and the token budget |
 | `src/review/` | routing, dedupe, confidence policy |
 | `src/github/` | REST client, PR fetch, review publish |
-| `src/store/` | config, credentials, migrations |
+| `src/store/` | per-user project store, credentials, migrations |
 | `skills/reviewers/` | the eight reviewer rubrics (plain markdown) |
 
 ---

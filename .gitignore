@@ -1,5 +1,6 @@
-# Kavach's own working store for this repo. In a *target* project, commit
-# config.json / rules.md / knowledge.md and ignore runs/ and logs/ instead.
+# Kavach writes nothing into a repository any more — all project state lives
+# under ~/.kavach/projects/. This entry only covers stores created by older
+# versions, which are migrated on first run and then ignored.
 .pr-architect/
 
 node_modules/

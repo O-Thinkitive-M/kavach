@@ -1,4 +1,6 @@
 // `kavach config` — optional tuning. Never required: Kavach configures itself.
+//
+// Settings are per user, under ~/.kavach/projects/, not in the repository.
 
 import { unlinkSync } from 'node:fs';
 import { loadConfig, storePath, writeConfig } from '../store/config.ts';

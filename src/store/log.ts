@@ -1,4 +1,4 @@
-// Day-wise review log: .pr-architect/logs/YYYY-MM-DD.md
+// Day-wise review log, stored per user at ~/.kavach/projects/<key>/logs/.
 //
 // One file per day, appended to after every publish. A running record of what
 // Kavach reviewed on this project — readable by a human, not a machine format.

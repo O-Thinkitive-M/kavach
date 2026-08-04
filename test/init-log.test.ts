@@ -3,16 +3,23 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { init } from '../src/commands/init.ts';
-import { appendLog, dayStamp, listLogDays, logPath, readLog } from '../src/store/log.ts';
-import { loadConfig } from '../src/store/config.ts';
-import { migrateConfig } from '../src/store/migrate.ts';
+// Sandbox the user store before importing anything that resolves it, so tests
+// never write into the developer's real ~/.kavach.
+const home = mkdtempSync(join(tmpdir(), 'kavach-home-'));
+process.env.KAVACH_HOME = home;
+
+const { init } = await import('../src/commands/init.ts');
+const { appendLog, dayStamp, listLogDays, logPath, readLog } = await import('../src/store/log.ts');
+const { loadConfig, loadKnowledge } = await import('../src/store/config.ts');
+const { migrateConfig } = await import('../src/store/migrate.ts');
 import type { ResolvedFinding, ReviewContext } from '../src/types.ts';
 
 let root: string;
+const created: string[] = [];
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'kavach-init-'));
+  created.push(root);
   writeFileSync(
     join(root, 'package.json'),
     JSON.stringify({
@@ -79,7 +86,8 @@ test('rules are appended, never overwritten', async () => {
   await init({ ...base, root, rules: 'First rule' });
   await init({ ...base, root, rules: 'Second rule' });
 
-  const rules = readFileSync(join(root, '.pr-architect', 'rules.md'), 'utf8');
+  // Rules live in the user store now, not in the repository.
+  const rules = loadKnowledge(root).rules;
   assert.match(rules, /- First rule/);
   assert.match(rules, /- Second rule/);
   // The template placeholder goes away once real rules exist.
@@ -88,7 +96,7 @@ test('rules are appended, never overwritten', async () => {
 
 test('multi-line rules become separate bullets', async () => {
   await init({ ...base, root, rules: 'Rule one\nRule two\nRule three' });
-  const rules = readFileSync(join(root, '.pr-architect', 'rules.md'), 'utf8');
+  const rules = loadKnowledge(root).rules;
   assert.equal((rules.match(/^- Rule/gm) ?? []).length, 3);
 });
 
@@ -338,4 +346,9 @@ process.on('exit', () => {
   } catch {
     // Already gone.
   }
+});
+
+process.on('exit', () => {
+  rmSync(home, { recursive: true, force: true });
+  for (const dir of created) rmSync(dir, { recursive: true, force: true });
 });

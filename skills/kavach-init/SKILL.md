@@ -5,9 +5,14 @@ description: Set up Kavach for a project — confirm its tech stack and capture 
 
 # Kavach — project setup
 
-Run **once per project folder**. Detection handles everything mechanical, so this
-is a short conversation, not a form. Re-running updates the answers; nothing is
-lost unless the user asks for a reset.
+Run **once per project**. Detection handles everything mechanical, so this is a
+short conversation, not a form. Re-running updates the answers; nothing is lost
+unless the user asks for a reset.
+
+**Everything is stored per user**, under `~/.kavach/projects/<project>/` — never
+inside the repository. These answers are the user's own: a teammate reviewing the
+same repo has their own separate rules and settings, and nothing here can be
+committed by accident.
 
 ## Step 1 — detect first, ask second
 
@@ -73,8 +78,8 @@ Money is integer cents, never floats" \
   --logs true
 ```
 
-- `--rules` takes one rule per line; they are **appended** to
-  `.pr-architect/rules.md`, never overwritten.
+- `--rules` takes one rule per line; they are **appended** to the user's own
+  `rules.md` for this project, never overwritten.
 - `--stack` only if detection got it wrong.
 - `--reset` only if the user explicitly wants to discard the old requirements.
 
@@ -85,6 +90,9 @@ Report what was saved in two or three lines, and tell them the important part:
 > Kavach is set up for this project. Paste any PR URL and it reviews
 > autonomously — it won't ask you anything again. Run `/kavach-init` any time to
 > change these answers.
+>
+> These settings are yours alone, stored outside the repo. Nothing was added to
+> the project's files.
 
 ## Rules
 
