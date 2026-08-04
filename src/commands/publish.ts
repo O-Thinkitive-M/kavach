@@ -121,7 +121,9 @@ export async function publish(opts: PublishOptions): Promise<void> {
     dryRun: false,
   });
 
-  if (config.notify.googleChat) {
+  // A repeat run has nothing to report: sending "0 of 0 findings" to Chat is
+  // noise, and it arrives looking like a failed review.
+  if (config.notify.googleChat && !(nothingNew && resolved.duplicates > 0)) {
     await notifySuccess(
       context,
       allFindings,
