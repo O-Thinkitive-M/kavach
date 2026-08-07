@@ -19,11 +19,12 @@ This guide takes about **5 minutes**. No prior setup knowledge needed.
 5. [Tell Kavach your credentials](#5-tell-kavach-your-credentials)
 6. [Set up your project](#6-set-up-your-project)
 7. [Review your first PR](#7-review-your-first-pr)
-8. [The day-wise review log](#8-the-day-wise-review-log)
-9. [Using it on any other project](#9-using-it-on-any-other-project)
-10. [Settings you can change](#10-settings-you-can-change)
-11. [When something goes wrong](#11-when-something-goes-wrong)
-12. [Common questions](#12-common-questions)
+8. [Share the rules with your team](#8-share-the-rules-with-your-team)
+9. [The day-wise review log](#9-the-day-wise-review-log)
+10. [Using it on any other project](#10-using-it-on-any-other-project)
+11. [Settings you can change](#11-settings-you-can-change)
+12. [When something goes wrong](#12-when-something-goes-wrong)
+13. [Common questions](#13-common-questions)
 
 ### The flow at a glance
 
@@ -186,7 +187,7 @@ The path must be the folder containing the `.claude-plugin` directory.
 ```
 
 You should see **kavach** in the list. If you don't, see
-[When something goes wrong](#11-when-something-goes-wrong).
+[When something goes wrong](#12-when-something-goes-wrong).
 
 ---
 
@@ -311,7 +312,47 @@ bigger budget.
 
 ---
 
-## 8. The day-wise review log
+## 8. Share the rules with your team
+
+The best review comment is one nobody needed. Generate a checklist the team can
+read while writing code:
+
+```
+/kavach-checklist
+```
+
+This writes `REVIEW-CHECKLIST.md` into the project containing:
+
+- **Your project's rules** — whatever you told `/kavach-init`
+- **Your high-risk areas** — where reviews look hardest
+- **The criteria that apply to your stack** — React rules for a React project,
+  not all eight reviewers
+
+**Commit it.** The file only prevents review comments if people can see it.
+
+### Why this reduces PR comments
+
+Two things happen once it is committed:
+
+1. **Developers** see what will be checked before they open a PR.
+2. **Coding agents** pick it up. If the project has a `CLAUDE.md`, Kavach adds a
+   pointer to it automatically, so Claude Code follows the same rules the
+   reviewer applies while it is writing the code.
+
+Regenerate whenever your rules change:
+
+```
+/kavach-init                    # add or change a rule
+/kavach-checklist               # rebuild the file to match
+```
+
+> This is the **only** Kavach command that writes into your repository —
+> everything else lives under `~/.kavach/`. Use `--print` to preview it first, or
+> `--out docs/review.md` to write somewhere else.
+
+---
+
+## 9. The day-wise review log
 
 **Off by default.** Turn it on when setting up a project — `/kavach-init` asks, or:
 
@@ -361,7 +402,7 @@ To turn logging off again: `/kavach-config notify.reviewLog=false`
 
 ---
 
-## 9. Using it on any other project
+## 10. Using it on any other project
 
 **Nothing to set up.** Open a different project, paste a PR link, and it works.
 
@@ -425,7 +466,7 @@ you can do to make reviews better.
 
 ---
 
-## 10. Settings you can change
+## 11. Settings you can change
 
 Everything has a sensible default. Change things only if you want to.
 
@@ -469,7 +510,7 @@ Too many comments? Try:
 
 ---
 
-## 11. When something goes wrong
+## 12. When something goes wrong
 
 ### "Kavach needs credentials"
 
@@ -533,7 +574,7 @@ budget and tells you honestly: *"Reviewed 12 of 18 files"*. To review more:
 
 ---
 
-## 12. Common questions
+## 13. Common questions
 
 **Does this cost extra money?**
 No API key, no extra bill. It runs inside your existing Claude Code session.
@@ -613,6 +654,7 @@ And delete the token at <https://github.com/settings/tokens>.
 | See settings | `/kavach-config` |
 | Change a setting | `/kavach-config review.maxComments=10` |
 | Teach it project rules | `/kavach-init`, or edit your `rules.md` |
+| Share the rules with the team | `/kavach-checklist` |
 
 ---
 

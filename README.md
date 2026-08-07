@@ -8,7 +8,7 @@
 
 [![version](https://img.shields.io/badge/version-1.0.0-2b7489)](https://github.com/O-Thinkitive-M/kavach)
 [![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#development)
-[![tests](https://img.shields.io/badge/tests-128%20passing-brightgreen)](test/)
+[![tests](https://img.shields.io/badge/tests-143%20passing-brightgreen)](test/)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.18-339933)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -188,6 +188,23 @@ security,typescript · 12/18 files · H2 M3 L1 · 7 posted · [review](…)
 /kavach-log list        # which days have logs
 ```
 
+### Prevent comments instead of collecting them
+
+```bash
+/kavach-checklist
+```
+
+Writes `REVIEW-CHECKLIST.md` into the project: your rules, your high-risk areas,
+and the criteria from the reviewers that apply to your stack. Commit it, and the
+team reads what the reviewer checks **while writing the code** rather than
+discovering it afterwards.
+
+If the project has a `CLAUDE.md`, a pointer is added automatically — so a coding
+agent working in that repo follows the same rules the reviewer will apply. That
+is the point: fewer review comments because fewer issues get written.
+
+This is the **only** command that writes into your repository.
+
 ### Teach it your project's rules
 
 Add them with `/kavach-init`, or edit your own `rules.md` for that project
@@ -246,7 +263,7 @@ Zero runtime dependencies. Node 24 runs the TypeScript directly — no build ste
 no bundler, no `npm install`.
 
 ```bash
-node --test test/*.test.ts     # 128 tests
+node --test test/*.test.ts     # 143 tests
 node src/cli.ts run <pr-url>
 node src/cli.ts publish --run <dir> --dry-run
 ```

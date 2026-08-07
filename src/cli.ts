@@ -10,6 +10,7 @@ import { configCommand } from './commands/config.ts';
 import { setup } from './commands/setup.ts';
 import { init } from './commands/init.ts';
 import { logCommand } from './commands/log.ts';
+import { checklist } from './commands/checklist.ts';
 import { notifyError } from './notify/chat.ts';
 import { banner, c } from './brand.ts';
 import { KavachError, NeedsCredentialError, type Stage } from './types.ts';
@@ -30,6 +31,11 @@ const USAGE = `kavach — autonomous PR review
 
   kavach log [--show] [--day YYYY-MM-DD] [--list]
       Read the day-wise review log.
+
+  kavach checklist [--out <path>] [--print] [--force]
+      Write REVIEW-CHECKLIST.md into the project so the team sees the
+      review criteria while writing code. The only command that writes
+      into your repository.
 
   kavach config [--show] [--set key=value] [--reset-knowledge]
       Inspect or tune .pr-architect/config.json.
@@ -64,6 +70,9 @@ async function main(): Promise<number> {
       logs: { type: 'string' },
       day: { type: 'string' },
       list: { type: 'boolean', default: false },
+      out: { type: 'string' },
+      print: { type: 'boolean', default: false },
+      force: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -119,6 +128,10 @@ async function main(): Promise<number> {
 
     case 'log':
       logCommand({ root, day: values.day, list: values.list });
+      return 0;
+
+    case 'checklist':
+      await checklist({ root, out: values.out, force: values.force, print: values.print });
       return 0;
 
     case 'config':
